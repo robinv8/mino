@@ -15,6 +15,7 @@ class AppState: ObservableObject {
     private var streamTask: Task<Void, Never>?
     private var connectionTasks: [String: Task<Void, Never>] = [:]
     private var pendingMessage: String?
+    private var contentSpecInjected: Set<String> = []
 
     var activeAgent: Agent? {
         agents.first { $0.id == activeAgentId }
@@ -114,8 +115,11 @@ class AppState: ObservableObject {
             }
         }
 
-        // 首条消息自动注入 Content Spec 上下文
-        let actualContent = isFirstUserMessage(agentId: agentId) ? contentSpecContext + content : content
+        // 每次连接后的首条消息自动注入 Content Spec 上下文
+        let needsInjection = !contentSpecInjected.contains(agentId)
+        let actualContent = needsInjection ? contentSpecContext + content : content
+        if needsInjection { contentSpecInjected.insert(agentId) }
+        print("[Mino] Sending message: injected=\(needsInjection), contentLength=\(actualContent.count)")
 
         do {
             try await client.sendMessage(actualContent)
@@ -397,14 +401,6 @@ class AppState: ObservableObject {
     }
 
     // MARK: - Private: Content Spec Injection
-
-    private func isFirstUserMessage(agentId: String) -> Bool {
-        let userMessages = conversations[agentId]?
-            .flatMap(\.messages)
-            .filter { $0.role == .user }
-        // 刚追加了当前消息，所以 count == 1 说明是第一条
-        return (userMessages?.count ?? 0) <= 1
-    }
 
     private let contentSpecContext = """
     [Client Context — Mino Content Spec v0.1]

@@ -150,15 +150,51 @@ enum ContentBlockParser {
             ))
 
         case "table":
-            // table 比较复杂，inline 标签里不太适合，跳过
-            return nil
+            guard let headers = parseJSONArray(attrs["headers"]),
+                  let rows = parseJSONMatrix(attrs["rows"]) else { return nil }
+            return .table(TableBlock(headers: headers, rows: rows, caption: attrs["caption"]))
 
         case "action":
-            // action 也不适合 inline 标签
-            return nil
+            guard let actionsJSON = attrs["actions"],
+                  let data = actionsJSON.data(using: .utf8),
+                  let actions = try? JSONDecoder().decode([ActionItem].self, from: data) else { return nil }
+            return .action(ActionBlock(prompt: attrs["prompt"], actions: actions))
+
+        case "radio":
+            guard let options = parseOptions(attrs["options"]) else { return nil }
+            return .radio(RadioBlock(label: attrs["label"], options: options, defaultValue: attrs["defaultValue"]))
+
+        case "checkbox":
+            guard let options = parseOptions(attrs["options"]) else { return nil }
+            let defaults = parseJSONArray(attrs["defaultValues"])
+            return .checkbox(CheckboxBlock(label: attrs["label"], options: options, defaultValues: defaults))
+
+        case "dropdown":
+            guard let options = parseOptions(attrs["options"]) else { return nil }
+            return .dropdown(DropdownBlock(label: attrs["label"], placeholder: attrs["placeholder"], options: options, defaultValue: attrs["defaultValue"]))
 
         default:
             return .unknown(type)
         }
+    }
+
+    // MARK: - JSON Helpers for inline attributes
+
+    private static func parseJSONArray(_ str: String?) -> [String]? {
+        guard let str, let data = str.data(using: .utf8),
+              let arr = try? JSONSerialization.jsonObject(with: data) as? [String] else { return nil }
+        return arr
+    }
+
+    private static func parseJSONMatrix(_ str: String?) -> [[String]]? {
+        guard let str, let data = str.data(using: .utf8),
+              let arr = try? JSONSerialization.jsonObject(with: data) as? [[String]] else { return nil }
+        return arr
+    }
+
+    private static func parseOptions(_ str: String?) -> [SelectionOption]? {
+        guard let str, let data = str.data(using: .utf8),
+              let options = try? JSONDecoder().decode([SelectionOption].self, from: data) else { return nil }
+        return options
     }
 }
