@@ -17,6 +17,11 @@ class AppState: ObservableObject {
     private var pendingMessage: String?
     private var contentSpecInjected: Set<String> = []
 
+    // Throttle streaming text updates to avoid overwhelming SwiftUI
+    private var pendingTextBuffer: [UUID: String] = [:]
+    private var flushTask: Task<Void, Never>?
+    private let flushInterval: UInt64 = 30_000_000 // 30ms
+
     var activeAgent: Agent? {
         agents.first { $0.id == activeAgentId }
     }
@@ -50,6 +55,170 @@ class AppState: ObservableObject {
         if activeAgentId == nil, let first = agents.first {
             activeAgentId = first.id
         }
+    }
+
+    // MARK: - Mock Agent (for debugging UI)
+
+    func loadMockAgent() {
+        let mockId = "mock-preview"
+
+        // Remove existing mock if present
+        agents.removeAll { $0.id == mockId }
+        conversations.removeValue(forKey: mockId)
+
+        let agent = Agent(id: mockId, name: "Preview Bot", url: "mock://local", status: .connected)
+        agents.append(agent)
+        activeAgentId = mockId
+
+        let messages: [ChatMessage] = [
+            ChatMessage(role: .user, content: "Show me all the components", type: .text),
+
+            // Text with markdown
+            ChatMessage(role: .agent, content: "", type: .text, contentBlocks: [
+                .text(TextBlock(content: "Here's a quick overview of what I can render:")),
+            ]),
+
+            // Code block
+            ChatMessage(role: .agent, content: "", type: .text, contentBlocks: [
+                .text(TextBlock(content: "A code snippet:")),
+                .code(CodeBlock(
+                    content: "struct Agent {\n    let id: String\n    var name: String\n    var status: ConnectionStatus\n}",
+                    language: "swift",
+                    filename: "Agent.swift"
+                )),
+            ]),
+
+            // Multiple images (grid)
+            ChatMessage(role: .agent, content: "", type: .text, contentBlocks: [
+                .text(TextBlock(content: "Multiple images as a grid:")),
+                .image(ImageBlock(url: "https://picsum.photos/seed/a/400/300", caption: "Mountain")),
+                .image(ImageBlock(url: "https://picsum.photos/seed/b/400/300", caption: "Ocean")),
+                .image(ImageBlock(url: "https://picsum.photos/seed/c/400/300", caption: "Forest")),
+                .image(ImageBlock(url: "https://picsum.photos/seed/d/400/300", caption: "Desert")),
+            ]),
+
+            // Link card
+            ChatMessage(role: .agent, content: "", type: .text, contentBlocks: [
+                .link(LinkBlock(
+                    url: "https://github.com/nicepkg/mino",
+                    title: "Mino on GitHub",
+                    description: "An open-source universal agent interaction client."
+                )),
+            ]),
+
+            // Table
+            ChatMessage(role: .agent, content: "", type: .text, contentBlocks: [
+                .table(TableBlock(
+                    headers: ["Component", "Status", "Type"],
+                    rows: [
+                        ["text", "Ready", "Display"],
+                        ["image", "Ready", "Media"],
+                        ["code", "Ready", "Display"],
+                        ["table", "Ready", "Data"],
+                        ["action", "Ready", "Interactive"],
+                    ],
+                    caption: "Component Status"
+                )),
+            ]),
+
+            // Action buttons
+            ChatMessage(role: .agent, content: "", type: .text, contentBlocks: [
+                .action(ActionBlock(
+                    prompt: "Would you like to continue?",
+                    actions: [
+                        ActionItem(id: "yes", label: "Continue", style: "primary"),
+                        ActionItem(id: "no", label: "Cancel", style: "danger"),
+                        ActionItem(id: "later", label: "Later", style: nil),
+                    ]
+                )),
+            ]),
+
+            // Radio + Checkbox + Dropdown
+            ChatMessage(role: .agent, content: "", type: .text, contentBlocks: [
+                .radio(RadioBlock(
+                    label: "Pick a theme:",
+                    options: [
+                        SelectionOption(id: "light", label: "Light", description: "Clean and bright"),
+                        SelectionOption(id: "dark", label: "Dark", description: "Easy on the eyes"),
+                        SelectionOption(id: "auto", label: "Auto", description: "Follow system"),
+                    ],
+                    defaultValue: "dark"
+                )),
+                .checkbox(CheckboxBlock(
+                    label: "Enable features:",
+                    options: [
+                        SelectionOption(id: "sync", label: "Cloud Sync"),
+                        SelectionOption(id: "notify", label: "Notifications"),
+                        SelectionOption(id: "analytics", label: "Analytics"),
+                    ],
+                    defaultValues: ["sync"]
+                )),
+                .dropdown(DropdownBlock(
+                    label: "Language:",
+                    placeholder: "Select...",
+                    options: [
+                        SelectionOption(id: "en", label: "English"),
+                        SelectionOption(id: "zh", label: "Chinese"),
+                        SelectionOption(id: "ja", label: "Japanese"),
+                    ]
+                )),
+            ]),
+
+            // File block
+            ChatMessage(role: .agent, content: "", type: .text, contentBlocks: [
+                .file(FileBlock(
+                    path: "/tmp/report.pdf",
+                    name: "report.pdf",
+                    size: 2_048_576,
+                    mimeType: "application/pdf"
+                )),
+            ]),
+
+            // Audio
+            ChatMessage(role: .agent, content: "", type: .text, contentBlocks: [
+                .text(TextBlock(content: "Here's the recording:")),
+                .audio(AudioBlock(
+                    url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+                    title: "Meeting Recording",
+                    duration: 372
+                )),
+            ]),
+
+            // Video
+            ChatMessage(role: .agent, content: "", type: .text, contentBlocks: [
+                .video(VideoBlock(
+                    url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+                    caption: "Big Buck Bunny — sample video"
+                )),
+            ]),
+
+            // Callout variants
+            ChatMessage(role: .agent, content: "", type: .text, contentBlocks: [
+                .callout(CalloutBlock(style: "info", title: "Note", content: "This is an informational callout for general tips.")),
+                .callout(CalloutBlock(style: "success", title: "Done", content: "The operation completed successfully.")),
+                .callout(CalloutBlock(style: "warning", title: "Caution", content: "This action cannot be undone easily.")),
+                .callout(CalloutBlock(style: "error", title: "Error", content: "Failed to connect to the remote server.")),
+            ]),
+
+            // Tool call
+            ChatMessage(
+                role: .agent, content: "", type: .toolCall,
+                toolCallInfo: ToolCallInfo(
+                    id: "tc-1", toolName: "Read",
+                    arguments: "{ \"path\": \"/Users/robin/Projects/im/Mino/README.md\" }",
+                    result: "File contents loaded (128 lines)",
+                    status: .completed
+                )
+            ),
+        ]
+
+        let segment = ConversationSegment(
+            id: "mock-session",
+            agentId: mockId,
+            startDate: Date(),
+            messages: messages
+        )
+        conversations[mockId] = [segment]
     }
 
     // MARK: - Agent Management
@@ -262,11 +431,12 @@ class AppState: ObservableObject {
     private func handleUpdate(_ update: SessionUpdate, streamingId: UUID, agentId: String) {
         switch update {
         case .textDelta(let text):
-            updateMessage(id: streamingId, agentId: agentId) { msg in
-                msg.content += text
-            }
+            // Buffer deltas and flush at intervals to reduce SwiftUI re-renders
+            pendingTextBuffer[streamingId, default: ""] += text
+            scheduleFlush(streamingId: streamingId, agentId: agentId)
 
         case .textComplete(let text):
+            flushPendingText(streamingId: streamingId, agentId: agentId)
             updateMessage(id: streamingId, agentId: agentId) { msg in
                 msg.content = text
                 msg.type = .text
@@ -327,6 +497,7 @@ class AppState: ObservableObject {
             break  // already showing streaming bubble
 
         case .lifecycleEnd:
+            flushPendingText(streamingId: streamingId, agentId: agentId)
             updateMessage(id: streamingId, agentId: agentId) { msg in
                 if msg.isStreaming {
                     msg.type = .text
@@ -353,6 +524,25 @@ class AppState: ObservableObject {
     func selectAgent(_ agentId: String) {
         activeAgentId = agentId
         unreadCounts[agentId] = 0
+    }
+
+    // MARK: - Private: Text Delta Throttling
+
+    private func scheduleFlush(streamingId: UUID, agentId: String) {
+        guard flushTask == nil else { return }
+        flushTask = Task {
+            try? await Task.sleep(nanoseconds: flushInterval)
+            flushPendingText(streamingId: streamingId, agentId: agentId)
+        }
+    }
+
+    private func flushPendingText(streamingId: UUID, agentId: String) {
+        flushTask?.cancel()
+        flushTask = nil
+        guard let buffered = pendingTextBuffer.removeValue(forKey: streamingId), !buffered.isEmpty else { return }
+        updateMessage(id: streamingId, agentId: agentId) { msg in
+            msg.content += buffered
+        }
     }
 
     // MARK: - Private: Message Helpers
@@ -403,22 +593,25 @@ class AppState: ObservableObject {
     // MARK: - Private: Content Spec Injection
 
     private let contentSpecContext = """
-    [Client Context — Mino Content Spec v0.1]
-    This client supports structured content rendering. You can use <mino-block /> tags in your response for richer display:
+    [System — Rendering Format]
+    This client renders <mino-block /> tags as native UI components. Treat them like Markdown — use them naturally without mentioning the tags themselves. Never explain that you are using these tags; just embed them inline.
 
-    Available components:
-    - <mino-block type="image" url="path_or_url" caption="..." />
-    - <mino-block type="code" language="swift" filename="Example.swift" content="..." />
-    - <mino-block type="link" url="..." title="..." description="..." />
-    - <mino-block type="file" path="..." name="..." size="1024" mimeType="..." />
-    - <mino-block type="table" headers='["A","B"]' rows='[["1","2"]]' caption="..." />
-    - <mino-block type="action" prompt="..." actions='[{"id":"ok","label":"OK","style":"primary"}]' />
-    - <mino-block type="radio" label="Pick one:" options='[{"id":"a","label":"A"}]' />
-    - <mino-block type="checkbox" label="Select:" options='[{"id":"a","label":"A"}]' />
-    - <mino-block type="dropdown" label="Choose:" options='[{"id":"a","label":"A"}]' placeholder="..." />
+    Format reference:
+    <mino-block type="image" url="..." caption="..." />
+    <mino-block type="code" language="..." filename="..." content="..." />
+    <mino-block type="link" url="..." title="..." description="..." />
+    <mino-block type="file" path="..." name="..." size="..." mimeType="..." />
+    <mino-block type="table" headers='["A","B"]' rows='[["1","2"]]' caption="..." />
+    <mino-block type="action" prompt="..." actions='[{"id":"ok","label":"OK","style":"primary"}]' />
+    <mino-block type="radio" label="..." options='[{"id":"a","label":"A"}]' />
+    <mino-block type="checkbox" label="..." options='[{"id":"a","label":"A"}]' />
+    <mino-block type="dropdown" label="..." options='[{"id":"a","label":"A"}]' placeholder="..." />
+    <mino-block type="audio" url="..." title="..." duration="120" />
+    <mino-block type="video" url="..." caption="..." />
+    <mino-block type="callout" style="info|warning|error|success" title="..." content="..." />
 
-    Use these tags only when structured display genuinely improves the response. Plain text/Markdown is always fine.
-    [End Client Context]
+    Keep text brief and conversational. Let the components speak for themselves.
+    [End System]
 
     """
 

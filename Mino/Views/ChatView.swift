@@ -36,10 +36,7 @@ struct ChatView: View {
                 .onChange(of: appState.activeMessages.count) {
                     scrollToBottom(proxy)
                 }
-                .onChange(of: appState.activeMessages.last?.content) {
-                    scrollToBottom(proxy)
-                }
-                .onChange(of: appState.activeMessages.last?.thinkingContent) {
+                .onChange(of: appState.isGenerating) {
                     scrollToBottom(proxy)
                 }
             }

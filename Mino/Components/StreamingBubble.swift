@@ -4,6 +4,20 @@ struct StreamingBubble: View {
     let message: ChatMessage
     @State private var showCursor = true
 
+    /// Strip incomplete or complete <mino-block> tags from streaming text
+    private var displayContent: String {
+        var text = message.content
+        // Remove any complete <mino-block ... /> or <mino-block ...>...</mino-block> tags
+        while let range = text.range(of: #"<mino-block\s+[^>]*?(?:\/>|>[\s\S]*?<\/mino-block>)"#, options: .regularExpression) {
+            text.removeSubrange(range)
+        }
+        // Remove any incomplete <mino-block tag being built at the end
+        if let start = text.range(of: "<mino-block", options: .backwards) {
+            text = String(text[..<start.lowerBound])
+        }
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
@@ -25,7 +39,10 @@ struct StreamingBubble: View {
                         // Has thinking but no content yet — skip content area
                         EmptyView()
                     } else if message.isStreaming {
-                        Text(message.content)
+                        let clean = displayContent
+                        if !clean.isEmpty {
+                            Text(clean)
+                        }
                     } else {
                         MarkdownContent(content: message.content, role: .agent)
                     }

@@ -15,6 +15,14 @@ struct MinoApp: App {
         }
         .windowStyle(.titleBar)
         .defaultSize(width: 1200, height: 800)
+        .commands {
+            CommandMenu("Debug") {
+                Button("Load Preview Bot") {
+                    appState.loadMockAgent()
+                }
+                .keyboardShortcut("P", modifiers: [.command, .shift])
+            }
+        }
 
         Settings {
             SettingsView()

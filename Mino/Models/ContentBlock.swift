@@ -12,6 +12,9 @@ enum ContentBlock: Codable, Identifiable, Hashable {
     case radio(RadioBlock)
     case checkbox(CheckboxBlock)
     case dropdown(DropdownBlock)
+    case audio(AudioBlock)
+    case video(VideoBlock)
+    case callout(CalloutBlock)
     case unknown(String) // Unrecognized type, graceful fallback
 
     var id: String {
@@ -26,6 +29,9 @@ enum ContentBlock: Codable, Identifiable, Hashable {
         case .radio(let b): b.id
         case .checkbox(let b): b.id
         case .dropdown(let b): b.id
+        case .audio(let b): b.id
+        case .video(let b): b.id
+        case .callout(let b): b.id
         case .unknown(let t): "unknown-\(t.hashValue)"
         }
     }
@@ -50,6 +56,9 @@ enum ContentBlock: Codable, Identifiable, Hashable {
         case "radio": self = .radio(try RadioBlock(from: decoder))
         case "checkbox": self = .checkbox(try CheckboxBlock(from: decoder))
         case "dropdown": self = .dropdown(try DropdownBlock(from: decoder))
+        case "audio": self = .audio(try AudioBlock(from: decoder))
+        case "video": self = .video(try VideoBlock(from: decoder))
+        case "callout": self = .callout(try CalloutBlock(from: decoder))
         default: self = .unknown(type)
         }
     }
@@ -66,6 +75,9 @@ enum ContentBlock: Codable, Identifiable, Hashable {
         case .radio(let b): try b.encode(to: encoder)
         case .checkbox(let b): try b.encode(to: encoder)
         case .dropdown(let b): try b.encode(to: encoder)
+        case .audio(let b): try b.encode(to: encoder)
+        case .video(let b): try b.encode(to: encoder)
+        case .callout(let b): try b.encode(to: encoder)
         case .unknown: break
         }
     }
@@ -394,6 +406,103 @@ struct DropdownBlock: Codable, Hashable, Identifiable {
         try c.encodeIfPresent(placeholder, forKey: .placeholder)
         try c.encode(options, forKey: .options)
         try c.encodeIfPresent(defaultValue, forKey: .defaultValue)
+    }
+}
+
+// MARK: - Audio Block
+
+struct AudioBlock: Codable, Hashable, Identifiable {
+    let id: String
+    let url: String
+    let title: String?
+    let duration: Double? // seconds
+
+    enum CodingKeys: String, CodingKey { case type, url, title, duration }
+    init(url: String, title: String? = nil, duration: Double? = nil) {
+        self.id = UUID().uuidString
+        self.url = url
+        self.title = title
+        self.duration = duration
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.url = try c.decode(String.self, forKey: .url)
+        self.title = try c.decodeIfPresent(String.self, forKey: .title)
+        self.duration = try c.decodeIfPresent(Double.self, forKey: .duration)
+        self.id = UUID().uuidString
+    }
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode("audio", forKey: .type)
+        try c.encode(url, forKey: .url)
+        try c.encodeIfPresent(title, forKey: .title)
+        try c.encodeIfPresent(duration, forKey: .duration)
+    }
+}
+
+// MARK: - Video Block
+
+struct VideoBlock: Codable, Hashable, Identifiable {
+    let id: String
+    let url: String
+    let caption: String?
+    let width: Int?
+    let height: Int?
+
+    enum CodingKeys: String, CodingKey { case type, url, caption, width, height }
+    init(url: String, caption: String? = nil, width: Int? = nil, height: Int? = nil) {
+        self.id = UUID().uuidString
+        self.url = url
+        self.caption = caption
+        self.width = width
+        self.height = height
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.url = try c.decode(String.self, forKey: .url)
+        self.caption = try c.decodeIfPresent(String.self, forKey: .caption)
+        self.width = try c.decodeIfPresent(Int.self, forKey: .width)
+        self.height = try c.decodeIfPresent(Int.self, forKey: .height)
+        self.id = UUID().uuidString
+    }
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode("video", forKey: .type)
+        try c.encode(url, forKey: .url)
+        try c.encodeIfPresent(caption, forKey: .caption)
+        try c.encodeIfPresent(width, forKey: .width)
+        try c.encodeIfPresent(height, forKey: .height)
+    }
+}
+
+// MARK: - Callout Block
+
+struct CalloutBlock: Codable, Hashable, Identifiable {
+    let id: String
+    let style: String // info, warning, error, success
+    let title: String?
+    let content: String
+
+    enum CodingKeys: String, CodingKey { case type, style, title, content }
+    init(style: String = "info", title: String? = nil, content: String) {
+        self.id = UUID().uuidString
+        self.style = style
+        self.title = title
+        self.content = content
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.style = try c.decodeIfPresent(String.self, forKey: .style) ?? "info"
+        self.title = try c.decodeIfPresent(String.self, forKey: .title)
+        self.content = try c.decode(String.self, forKey: .content)
+        self.id = UUID().uuidString
+    }
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode("callout", forKey: .type)
+        try c.encode(style, forKey: .style)
+        try c.encodeIfPresent(title, forKey: .title)
+        try c.encode(content, forKey: .content)
     }
 }
 

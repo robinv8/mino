@@ -173,6 +173,31 @@ enum ContentBlockParser {
             guard let options = parseOptions(attrs["options"]) else { return nil }
             return .dropdown(DropdownBlock(label: attrs["label"], placeholder: attrs["placeholder"], options: options, defaultValue: attrs["defaultValue"]))
 
+        case "audio":
+            guard let url = attrs["url"] else { return nil }
+            return .audio(AudioBlock(
+                url: url,
+                title: attrs["title"],
+                duration: attrs["duration"].flatMap(Double.init)
+            ))
+
+        case "video":
+            guard let url = attrs["url"] else { return nil }
+            return .video(VideoBlock(
+                url: url,
+                caption: attrs["caption"],
+                width: attrs["width"].flatMap(Int.init),
+                height: attrs["height"].flatMap(Int.init)
+            ))
+
+        case "callout":
+            let content = innerContent ?? attrs["content"] ?? ""
+            return .callout(CalloutBlock(
+                style: attrs["style"] ?? "info",
+                title: attrs["title"],
+                content: content
+            ))
+
         default:
             return .unknown(type)
         }

@@ -12,20 +12,22 @@ struct MarkdownContent: View {
             .textSelection(.enabled)
     }
 
-    /// Convert bare local image paths into markdown image syntax
-    private var processedContent: String {
-        let imageExtensions = Set(["png", "jpg", "jpeg", "gif", "webp", "bmp", "tiff", "svg", "heic"])
-        var result = content
-
-        // Match absolute file paths that look like images
-        // Pattern: /path/to/file.ext (at line start, end, or surrounded by whitespace)
-        guard let regex = try? NSRegularExpression(
+    private static let imagePathRegex: NSRegularExpression? = {
+        try? NSRegularExpression(
             pattern: #"(?:^|\s)(\/[\w\-\.\/~]+\.(?:png|jpg|jpeg|gif|webp|bmp|tiff|svg|heic))(?:\s|$)"#,
             options: [.caseInsensitive, .anchorsMatchLines]
-        ) else { return content }
+        )
+    }()
+
+    /// Convert bare local image paths into markdown image syntax
+    private var processedContent: String {
+        guard let regex = Self.imagePathRegex else { return content }
 
         let nsContent = content as NSString
         let matches = regex.matches(in: content, range: NSRange(location: 0, length: nsContent.length))
+        guard !matches.isEmpty else { return content }
+
+        var result = content
 
         // Replace in reverse to preserve indices
         for match in matches.reversed() {
