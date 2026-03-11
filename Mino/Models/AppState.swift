@@ -241,15 +241,13 @@ class AppState: ObservableObject {
             creds.scopes = operator_["scopes"] as? [String] ?? ["operator.admin"]
         }
 
-        // fallback: 读密码
-        if creds.token == nil {
-            let configPath = home.appendingPathComponent(".openclaw/openclaw.json")
-            if let data = try? Data(contentsOf: configPath),
-               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let gateway = json["gateway"] as? [String: Any],
-               let auth = gateway["auth"] as? [String: Any] {
-                creds.password = auth["password"] as? String
-            }
+        // 读取 gateway 密码
+        let configPath = home.appendingPathComponent(".openclaw/openclaw.json")
+        if let data = try? Data(contentsOf: configPath),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let gateway = json["gateway"] as? [String: Any],
+           let auth = gateway["auth"] as? [String: Any] {
+            creds.password = auth["password"] as? String
         }
 
         return creds

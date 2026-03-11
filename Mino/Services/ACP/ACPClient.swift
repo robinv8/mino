@@ -187,17 +187,14 @@ actor ACPClient {
     private func handleChallenge() async {
         print("[ACP] Challenge received, sending connect request...")
 
-        // 构建 auth 参数：优先 token，fallback 密码
+        // 构建 auth 参数：优先密码，fallback token
         var authParams: [String: Any]
-        if let token = credentials.token, let deviceId = credentials.deviceId {
-            authParams = [
-                "token": token,
-                "deviceId": deviceId
-            ]
-            print("[ACP] Using token auth (deviceId: \(deviceId.prefix(12))...)")
-        } else if let password = credentials.password {
+        if let password = credentials.password {
             authParams = ["password": password]
             print("[ACP] Using password auth")
+        } else if let token = credentials.token {
+            authParams = ["token": token]
+            print("[ACP] Using token auth")
         } else {
             authParams = [:]
             print("[ACP] Warning: no credentials available")
