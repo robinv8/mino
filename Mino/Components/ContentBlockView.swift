@@ -1,0 +1,553 @@
+import SwiftUI
+import MarkdownUI
+
+/// 渲染单个 ContentBlock
+struct ContentBlockView: View {
+    let block: ContentBlock
+    var onAction: ((String) -> Void)?
+
+    var body: some View {
+        switch block {
+        case .text(let b): TextBlockView(block: b)
+        case .image(let b): ImageBlockView(block: b)
+        case .code(let b): CodeBlockView(block: b)
+        case .link(let b): LinkBlockView(block: b)
+        case .file(let b): FileBlockView(block: b)
+        case .table(let b): TableBlockView(block: b)
+        case .action(let b): ActionBlockView(block: b, onAction: onAction)
+        case .radio(let b): RadioBlockView(block: b, onAction: onAction)
+        case .checkbox(let b): CheckboxBlockView(block: b, onAction: onAction)
+        case .dropdown(let b): DropdownBlockView(block: b, onAction: onAction)
+        case .unknown: EmptyView()
+        }
+    }
+}
+
+/// 渲染多个 blocks 的容器
+struct ContentBlocksView: View {
+    let blocks: [ContentBlock]
+    var onAction: ((String) -> Void)?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(blocks) { block in
+                ContentBlockView(block: block, onAction: onAction)
+            }
+        }
+    }
+}
+
+// MARK: - Text Block
+
+private struct TextBlockView: View {
+    let block: TextBlock
+
+    var body: some View {
+        MarkdownContent(content: block.content, role: .agent)
+    }
+}
+
+// MARK: - Image Block
+
+private struct ImageBlockView: View {
+    let block: ImageBlock
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            imageContent
+            if let caption = block.caption, !caption.isEmpty {
+                Text(caption)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var imageContent: some View {
+        if block.url.hasPrefix("/") || block.url.hasPrefix("file://") {
+            if let nsImage = loadLocalImage(block.url) {
+                Image(nsImage: nsImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxWidth: 400, maxHeight: 400)
+                    .clipShape(RoundedRectangle(cornerRadius: MinoTheme.cornerRadiusSmall, style: .continuous))
+            } else {
+                placeholder("File not found")
+            }
+        } else if block.url.hasPrefix("data:") {
+            if let nsImage = loadBase64(block.url) {
+                Image(nsImage: nsImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxWidth: 400, maxHeight: 400)
+                    .clipShape(RoundedRectangle(cornerRadius: MinoTheme.cornerRadiusSmall, style: .continuous))
+            } else {
+                placeholder("Failed to decode")
+            }
+        } else if let url = URL(string: block.url) {
+            AsyncImage(url: url) { phase in
+                if let image = phase.image {
+                    image.resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: 400, maxHeight: 400)
+                        .clipShape(RoundedRectangle(cornerRadius: MinoTheme.cornerRadiusSmall, style: .continuous))
+                } else if phase.error != nil {
+                    placeholder("Failed to load")
+                } else {
+                    ProgressView().frame(width: 80, height: 60)
+                }
+            }
+        }
+    }
+
+    private func placeholder(_ text: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "photo")
+            Text(text)
+        }
+        .font(.system(size: 11))
+        .foregroundStyle(.secondary)
+        .padding(8)
+        .background(Color.primary.opacity(0.04))
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+    }
+
+    private func loadLocalImage(_ path: String) -> NSImage? {
+        let p = path.hasPrefix("file://") ? (URL(string: path)?.path ?? path) : (path as NSString).expandingTildeInPath
+        return NSImage(contentsOfFile: p)
+    }
+
+    private func loadBase64(_ dataURL: String) -> NSImage? {
+        guard let i = dataURL.firstIndex(of: ",") else { return nil }
+        guard let data = Data(base64Encoded: String(dataURL[dataURL.index(after: i)...])) else { return nil }
+        return NSImage(data: data)
+    }
+}
+
+// MARK: - Code Block
+
+private struct CodeBlockView: View {
+    let block: CodeBlock
+    @State private var copied = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header bar
+            if block.filename != nil || block.language != nil {
+                HStack(spacing: 6) {
+                    if let filename = block.filename {
+                        Image(systemName: "doc.text")
+                            .font(.system(size: 10))
+                        Text(filename)
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    }
+                    if let lang = block.language, block.filename == nil {
+                        Text(lang)
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    Spacer()
+                    Button {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(block.content, forType: .string)
+                        copied = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
+                    } label: {
+                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                            .font(.system(size: 10))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                }
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.primary.opacity(0.03))
+            }
+
+            // Code content
+            ScrollView(.horizontal, showsIndicators: false) {
+                Text(block.content)
+                    .font(.system(size: MinoTheme.codeSize, design: .monospaced))
+                    .textSelection(.enabled)
+                    .padding(10)
+            }
+        }
+        .background(Color(.controlBackgroundColor).opacity(0.5))
+        .clipShape(RoundedRectangle(cornerRadius: MinoTheme.cornerRadiusSmall, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: MinoTheme.cornerRadiusSmall, style: .continuous)
+                .stroke(MinoTheme.border, lineWidth: 0.5)
+        )
+    }
+}
+
+// MARK: - Link Block
+
+private struct LinkBlockView: View {
+    let block: LinkBlock
+
+    var body: some View {
+        Button {
+            if let url = URL(string: block.url) {
+                NSWorkspace.shared.open(url)
+            }
+        } label: {
+            HStack(spacing: 10) {
+                // 预览图
+                if let imageURL = block.image {
+                    AsyncImage(url: URL(string: imageURL)) { phase in
+                        if let image = phase.image {
+                            image.resizable().aspectRatio(contentMode: .fill)
+                        } else {
+                            Color.primary.opacity(0.04)
+                        }
+                    }
+                    .frame(width: 48, height: 48)
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                } else {
+                    ZStack {
+                        Color.primary.opacity(0.04)
+                        Image(systemName: "link")
+                            .font(.system(size: 16))
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(width: 48, height: 48)
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(block.title ?? block.url)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    if let desc = block.description {
+                        Text(desc)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                    Text(URL(string: block.url)?.host ?? block.url)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
+                Spacer()
+            }
+            .padding(10)
+            .background(MinoTheme.surfaceRaised)
+            .clipShape(RoundedRectangle(cornerRadius: MinoTheme.cornerRadiusSmall, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: MinoTheme.cornerRadiusSmall, style: .continuous)
+                    .stroke(MinoTheme.border, lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - File Block
+
+private struct FileBlockView: View {
+    let block: FileBlock
+
+    var body: some View {
+        Button {
+            NSWorkspace.shared.selectFile(block.path, inFileViewerRootedAtPath: "")
+        } label: {
+            HStack(spacing: 10) {
+                ZStack {
+                    Color.primary.opacity(0.04)
+                    Image(systemName: fileIcon)
+                        .font(.system(size: 16))
+                        .foregroundStyle(MinoTheme.accent)
+                }
+                .frame(width: 40, height: 40)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(block.name ?? URL(fileURLWithPath: block.path).lastPathComponent)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    HStack(spacing: 8) {
+                        if let size = block.size {
+                            Text(ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file))
+                                .font(.system(size: 10))
+                                .foregroundStyle(.tertiary)
+                        }
+                        if let mime = block.mimeType {
+                            Text(mime)
+                                .font(.system(size: 10))
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                }
+                Spacer()
+                Image(systemName: "arrow.right.circle")
+                    .foregroundStyle(.secondary)
+                    .font(.system(size: 14))
+            }
+            .padding(10)
+            .background(MinoTheme.surfaceRaised)
+            .clipShape(RoundedRectangle(cornerRadius: MinoTheme.cornerRadiusSmall, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: MinoTheme.cornerRadiusSmall, style: .continuous)
+                    .stroke(MinoTheme.border, lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var fileIcon: String {
+        switch block.mimeType {
+        case let m? where m.hasPrefix("image/"): "photo"
+        case let m? where m.hasPrefix("video/"): "film"
+        case let m? where m.hasPrefix("audio/"): "waveform"
+        case let m? where m.contains("pdf"): "doc.richtext"
+        case let m? where m.contains("zip") || m.contains("tar"): "archivebox"
+        default: "doc"
+        }
+    }
+}
+
+// MARK: - Table Block
+
+private struct TableBlockView: View {
+    let block: TableBlock
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if let caption = block.caption {
+                Text(caption)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                VStack(spacing: 0) {
+                    // Header row
+                    HStack(spacing: 0) {
+                        ForEach(block.headers.indices, id: \.self) { i in
+                            Text(block.headers[i])
+                                .font(.system(size: 11, weight: .semibold))
+                                .frame(minWidth: 80, alignment: .leading)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 6)
+                        }
+                    }
+                    .background(Color.primary.opacity(0.04))
+
+                    Divider()
+
+                    // Data rows
+                    ForEach(block.rows.indices, id: \.self) { rowIdx in
+                        HStack(spacing: 0) {
+                            ForEach(block.rows[rowIdx].indices, id: \.self) { colIdx in
+                                Text(block.rows[rowIdx][colIdx])
+                                    .font(.system(size: 11))
+                                    .frame(minWidth: 80, alignment: .leading)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 5)
+                            }
+                        }
+                        if rowIdx < block.rows.count - 1 {
+                            Divider().opacity(0.5)
+                        }
+                    }
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: MinoTheme.cornerRadiusSmall, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: MinoTheme.cornerRadiusSmall, style: .continuous)
+                    .stroke(MinoTheme.border, lineWidth: 0.5)
+            )
+        }
+    }
+}
+
+// MARK: - Action Block
+
+private struct ActionBlockView: View {
+    let block: ActionBlock
+    var onAction: ((String) -> Void)?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let prompt = block.prompt {
+                Text(prompt)
+                    .font(.system(size: 13))
+            }
+            HStack(spacing: 8) {
+                ForEach(block.actions) { action in
+                    actionButton(action)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func actionButton(_ action: ActionItem) -> some View {
+        switch action.style {
+        case "primary":
+            Button(action.label) { onAction?(action.id) }
+                .buttonStyle(.borderedProminent)
+                .tint(MinoTheme.accent)
+                .controlSize(.small)
+        case "danger":
+            Button(action.label) { onAction?(action.id) }
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
+                .controlSize(.small)
+        default:
+            Button(action.label) { onAction?(action.id) }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+        }
+    }
+}
+
+// MARK: - Radio Block (单选)
+
+private struct RadioBlockView: View {
+    let block: RadioBlock
+    var onAction: ((String) -> Void)?
+    @State private var selected: String = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let label = block.label {
+                Text(label)
+                    .font(.system(size: 13, weight: .medium))
+            }
+            ForEach(block.options) { option in
+                Button {
+                    selected = option.id
+                    onAction?("radio:\(block.id):\(option.id)")
+                } label: {
+                    HStack(spacing: 8) {
+                        ZStack {
+                            Circle()
+                                .stroke(selected == option.id ? MinoTheme.accent : Color.primary.opacity(0.2), lineWidth: 1.5)
+                                .frame(width: 16, height: 16)
+                            if selected == option.id {
+                                Circle()
+                                    .fill(MinoTheme.accent)
+                                    .frame(width: 8, height: 8)
+                            }
+                        }
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(option.label)
+                                .font(.system(size: 12))
+                                .foregroundStyle(.primary)
+                            if let desc = option.description {
+                                Text(desc)
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .onAppear {
+            selected = block.defaultValue ?? ""
+        }
+    }
+}
+
+// MARK: - Checkbox Block (多选)
+
+private struct CheckboxBlockView: View {
+    let block: CheckboxBlock
+    var onAction: ((String) -> Void)?
+    @State private var selected: Set<String> = []
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let label = block.label {
+                Text(label)
+                    .font(.system(size: 13, weight: .medium))
+            }
+            ForEach(block.options) { option in
+                Button {
+                    if selected.contains(option.id) {
+                        selected.remove(option.id)
+                    } else {
+                        selected.insert(option.id)
+                    }
+                    onAction?("checkbox:\(block.id):\(selected.sorted().joined(separator: ","))")
+                } label: {
+                    HStack(spacing: 8) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                                .stroke(selected.contains(option.id) ? MinoTheme.accent : Color.primary.opacity(0.2), lineWidth: 1.5)
+                                .frame(width: 16, height: 16)
+                            if selected.contains(option.id) {
+                                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                                    .fill(MinoTheme.accent)
+                                    .frame(width: 16, height: 16)
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(.white)
+                            }
+                        }
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(option.label)
+                                .font(.system(size: 12))
+                                .foregroundStyle(.primary)
+                            if let desc = option.description {
+                                Text(desc)
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .onAppear {
+            selected = Set(block.defaultValues ?? [])
+        }
+    }
+}
+
+// MARK: - Dropdown Block (下拉选择)
+
+private struct DropdownBlockView: View {
+    let block: DropdownBlock
+    var onAction: ((String) -> Void)?
+    @State private var selected: String = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if let label = block.label {
+                Text(label)
+                    .font(.system(size: 13, weight: .medium))
+            }
+            Picker(selection: $selected) {
+                if selected.isEmpty {
+                    Text(block.placeholder ?? "Select...")
+                        .tag("")
+                }
+                ForEach(block.options) { option in
+                    Text(option.label).tag(option.id)
+                }
+            } label: {
+                EmptyView()
+            }
+            .pickerStyle(.menu)
+            .frame(maxWidth: 240)
+            .onChange(of: selected) { _, newValue in
+                if !newValue.isEmpty {
+                    onAction?("dropdown:\(block.id):\(newValue)")
+                }
+            }
+        }
+        .onAppear {
+            selected = block.defaultValue ?? ""
+        }
+    }
+}
