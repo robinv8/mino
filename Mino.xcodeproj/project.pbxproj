@@ -1,0 +1,525 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		021D035952BA280AADDB309D /* AddAgentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 464FA61C5C1DCCB983331E01 /* AddAgentView.swift */; };
+		0E2B68264655DC8305138809 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4AC049C7B8B63C888E2439F4 /* Assets.xcassets */; };
+		0EA426B36047CF01805BE526 /* ConversationSegment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00520F3FDE5D7207C72C17FF /* ConversationSegment.swift */; };
+		1A06958386CAA23E4CC1FE9C /* ResourceItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = A739392062F0C7AF0E6374DF /* ResourceItem.swift */; };
+		203319223F074A7A9A8EAB59 /* VideoPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA3397155C485236B8F3F012 /* VideoPlayerView.swift */; };
+		2E3B1B5CF241AFB1DB87E86F /* ACPClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F31175CD56FBCFD276426FE /* ACPClient.swift */; };
+		3B3FA4B61CA862BCECB1B70F /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = FC6FF2602FCC4CC6C856E34D /* MarkdownUI */; };
+		3BA0BA1656E70FF118F5295F /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E23CD38FC767DA292B2D6AFF /* ChatView.swift */; };
+		449AD2CD1C01A910CE00DE9D /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F676644CC579F8B2E68AF94 /* SidebarView.swift */; };
+		6206103FD5CC9817A047339B /* ConfirmationBubble.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9BB5E9FBA016E48DDF9135D /* ConfirmationBubble.swift */; };
+		69FCEC006A0EAE6E3F42036D /* ReconnectionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A0D86A65CBFE21808B059D /* ReconnectionManager.swift */; };
+		6A662344899D0651AC1CE2CE /* ResourcePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F1698291FA323495086DC83 /* ResourcePanel.swift */; };
+		6C9647F572F1083ECC609212 /* ACPTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60F474697C2B82BF67D7BAB9 /* ACPTypes.swift */; };
+		7A7CD5F9F9A16848BE24AB0A /* MinoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC7A0EE7C76E1A745F0D0125 /* MinoApp.swift */; };
+		7C39B9BD89B3839F48FCCCE2 /* ContentBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10866675E86728CFAB8CDFD9 /* ContentBlockView.swift */; };
+		7DB3BF557FE1EEBAB9905A25 /* MessageBubble.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8340638F80648BF510A8DC37 /* MessageBubble.swift */; };
+		800A6A3F9BF233838360D03A /* ImageBubble.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2C1E426AAB4FAA217A65DF0 /* ImageBubble.swift */; };
+		85165BF9CCD312759167106C /* ContentBlockParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = C720910A8F089FB24665942A /* ContentBlockParser.swift */; };
+		8561A7585C8AB0DA18AF60CD /* ACPTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08E7030EA9A2E834D15E3C1F /* ACPTransport.swift */; };
+		93919512BD183240BF018A8B /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C5F431EC3834B5F814E1152 /* SettingsView.swift */; };
+		9AB80D01C5F53F53D05A32CE /* PersistenceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85BD32F2C477ABD4425A7394 /* PersistenceService.swift */; };
+		9D31BFED6E69A4644DB4D6A0 /* ResourceExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1044088AEC977094DD3BEAE /* ResourceExtractor.swift */; };
+		A12587A4C7529ACF9E4E1352 /* MarkdownContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25687E2A3C97ED18C6487AEA /* MarkdownContent.swift */; };
+		ABFEA85C8FEE7AE812911FED /* ToolCallInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 794C74E2CF160B1550465275 /* ToolCallInfo.swift */; };
+		ADD4D115802771ADC1A3BA42 /* ToolCallBubble.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80573313742E7765A060B1D2 /* ToolCallBubble.swift */; };
+		B2862092CE2A607BB543D0C3 /* ThinkingSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 955E9DDB997310BE48E4F75B /* ThinkingSection.swift */; };
+		B4B6BF9C34B178F409853FB0 /* LocalImageProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0D39958DFD8338586089CDD /* LocalImageProvider.swift */; };
+		BE8DA4957AADAEE9C7072920 /* ChatMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB5FE0104CE3537CCF1A9A0F /* ChatMessage.swift */; };
+		C0C389B40079B9B54B34A178 /* StreamingBubble.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06D31C627277F0CB6B60910E /* StreamingBubble.swift */; };
+		C1A62964622B8248EF0F2EA7 /* AudioPlayerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 833B0687601D4D5476A22BDB /* AudioPlayerService.swift */; };
+		DEE21D6461241ED37DA87F59 /* Agent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 471A0DE13B70656AFF8D1179 /* Agent.swift */; };
+		E61D5D2040A1787B41A55F9F /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9117B6BA735630AFD504A32F /* ContentView.swift */; };
+		F8F32DEFDD03A94D8E23A829 /* ContentBlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9563DBB72A2AA6D6C564E22 /* ContentBlock.swift */; };
+		FB64DCEAAE4C9BC23374C8DE /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 265E34F1BA64BF692FF12181 /* AppState.swift */; };
+		FEB7C3E602D0CE9B3EE9BC2C /* MinoTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A82DDF462AB5E2F7B049CA8 /* MinoTheme.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		00520F3FDE5D7207C72C17FF /* ConversationSegment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationSegment.swift; sourceTree = "<group>"; };
+		06D31C627277F0CB6B60910E /* StreamingBubble.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingBubble.swift; sourceTree = "<group>"; };
+		08E7030EA9A2E834D15E3C1F /* ACPTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ACPTransport.swift; sourceTree = "<group>"; };
+		0F1698291FA323495086DC83 /* ResourcePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResourcePanel.swift; sourceTree = "<group>"; };
+		104A0BF552DB381015C60254 /* Mino.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Mino.entitlements; sourceTree = "<group>"; };
+		10866675E86728CFAB8CDFD9 /* ContentBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentBlockView.swift; sourceTree = "<group>"; };
+		25687E2A3C97ED18C6487AEA /* MarkdownContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownContent.swift; sourceTree = "<group>"; };
+		265E34F1BA64BF692FF12181 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
+		27F781FB423D7D7E9E6630F1 /* Mino.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Mino.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		2F31175CD56FBCFD276426FE /* ACPClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ACPClient.swift; sourceTree = "<group>"; };
+		3F676644CC579F8B2E68AF94 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
+		464FA61C5C1DCCB983331E01 /* AddAgentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddAgentView.swift; sourceTree = "<group>"; };
+		471A0DE13B70656AFF8D1179 /* Agent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent.swift; sourceTree = "<group>"; };
+		4AC049C7B8B63C888E2439F4 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		60F474697C2B82BF67D7BAB9 /* ACPTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ACPTypes.swift; sourceTree = "<group>"; };
+		794C74E2CF160B1550465275 /* ToolCallInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolCallInfo.swift; sourceTree = "<group>"; };
+		80573313742E7765A060B1D2 /* ToolCallBubble.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolCallBubble.swift; sourceTree = "<group>"; };
+		833B0687601D4D5476A22BDB /* AudioPlayerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayerService.swift; sourceTree = "<group>"; };
+		8340638F80648BF510A8DC37 /* MessageBubble.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageBubble.swift; sourceTree = "<group>"; };
+		85BD32F2C477ABD4425A7394 /* PersistenceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistenceService.swift; sourceTree = "<group>"; };
+		8C5F431EC3834B5F814E1152 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		9117B6BA735630AFD504A32F /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		955E9DDB997310BE48E4F75B /* ThinkingSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThinkingSection.swift; sourceTree = "<group>"; };
+		9A82DDF462AB5E2F7B049CA8 /* MinoTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MinoTheme.swift; sourceTree = "<group>"; };
+		A739392062F0C7AF0E6374DF /* ResourceItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResourceItem.swift; sourceTree = "<group>"; };
+		AA3397155C485236B8F3F012 /* VideoPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoPlayerView.swift; sourceTree = "<group>"; };
+		AB5FE0104CE3537CCF1A9A0F /* ChatMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMessage.swift; sourceTree = "<group>"; };
+		B9BB5E9FBA016E48DDF9135D /* ConfirmationBubble.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfirmationBubble.swift; sourceTree = "<group>"; };
+		BC7A0EE7C76E1A745F0D0125 /* MinoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MinoApp.swift; sourceTree = "<group>"; };
+		C720910A8F089FB24665942A /* ContentBlockParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentBlockParser.swift; sourceTree = "<group>"; };
+		E0D39958DFD8338586089CDD /* LocalImageProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalImageProvider.swift; sourceTree = "<group>"; };
+		E1044088AEC977094DD3BEAE /* ResourceExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResourceExtractor.swift; sourceTree = "<group>"; };
+		E23CD38FC767DA292B2D6AFF /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
+		E9563DBB72A2AA6D6C564E22 /* ContentBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentBlock.swift; sourceTree = "<group>"; };
+		F1A0D86A65CBFE21808B059D /* ReconnectionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReconnectionManager.swift; sourceTree = "<group>"; };
+		F2C1E426AAB4FAA217A65DF0 /* ImageBubble.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageBubble.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		83C566B904AD831BDDFF1AD4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3B3FA4B61CA862BCECB1B70F /* MarkdownUI in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		04779582DC84B641F37F186B /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				27F781FB423D7D7E9E6630F1 /* Mino.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		525701DDE2C605D0DB74D297 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				471A0DE13B70656AFF8D1179 /* Agent.swift */,
+				265E34F1BA64BF692FF12181 /* AppState.swift */,
+				AB5FE0104CE3537CCF1A9A0F /* ChatMessage.swift */,
+				E9563DBB72A2AA6D6C564E22 /* ContentBlock.swift */,
+				00520F3FDE5D7207C72C17FF /* ConversationSegment.swift */,
+				A739392062F0C7AF0E6374DF /* ResourceItem.swift */,
+				794C74E2CF160B1550465275 /* ToolCallInfo.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		5B117F316A52AC2A9C9C091B /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				464FA61C5C1DCCB983331E01 /* AddAgentView.swift */,
+				E23CD38FC767DA292B2D6AFF /* ChatView.swift */,
+				9117B6BA735630AFD504A32F /* ContentView.swift */,
+				0F1698291FA323495086DC83 /* ResourcePanel.swift */,
+				8C5F431EC3834B5F814E1152 /* SettingsView.swift */,
+				3F676644CC579F8B2E68AF94 /* SidebarView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		6EC9DBAFBAE1A545493D64C1 /* Theme */ = {
+			isa = PBXGroup;
+			children = (
+				9A82DDF462AB5E2F7B049CA8 /* MinoTheme.swift */,
+			);
+			path = Theme;
+			sourceTree = "<group>";
+		};
+		768D7952D6CCD82C2877BC27 /* Mino */ = {
+			isa = PBXGroup;
+			children = (
+				4AC049C7B8B63C888E2439F4 /* Assets.xcassets */,
+				104A0BF552DB381015C60254 /* Mino.entitlements */,
+				BC7A0EE7C76E1A745F0D0125 /* MinoApp.swift */,
+				B749EAB5FF6497E090F2EBE9 /* Components */,
+				525701DDE2C605D0DB74D297 /* Models */,
+				BA202F4A9334B2AA9F1420A4 /* Services */,
+				6EC9DBAFBAE1A545493D64C1 /* Theme */,
+				5B117F316A52AC2A9C9C091B /* Views */,
+			);
+			path = Mino;
+			sourceTree = "<group>";
+		};
+		7ADBBA7A9F2E69E5ED168BCF = {
+			isa = PBXGroup;
+			children = (
+				768D7952D6CCD82C2877BC27 /* Mino */,
+				04779582DC84B641F37F186B /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		B749EAB5FF6497E090F2EBE9 /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				B9BB5E9FBA016E48DDF9135D /* ConfirmationBubble.swift */,
+				10866675E86728CFAB8CDFD9 /* ContentBlockView.swift */,
+				F2C1E426AAB4FAA217A65DF0 /* ImageBubble.swift */,
+				E0D39958DFD8338586089CDD /* LocalImageProvider.swift */,
+				25687E2A3C97ED18C6487AEA /* MarkdownContent.swift */,
+				8340638F80648BF510A8DC37 /* MessageBubble.swift */,
+				06D31C627277F0CB6B60910E /* StreamingBubble.swift */,
+				955E9DDB997310BE48E4F75B /* ThinkingSection.swift */,
+				80573313742E7765A060B1D2 /* ToolCallBubble.swift */,
+				AA3397155C485236B8F3F012 /* VideoPlayerView.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+		BA202F4A9334B2AA9F1420A4 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				833B0687601D4D5476A22BDB /* AudioPlayerService.swift */,
+				C720910A8F089FB24665942A /* ContentBlockParser.swift */,
+				85BD32F2C477ABD4425A7394 /* PersistenceService.swift */,
+				E1044088AEC977094DD3BEAE /* ResourceExtractor.swift */,
+				D8A89E78EFACFB086F48FB3C /* ACP */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		D8A89E78EFACFB086F48FB3C /* ACP */ = {
+			isa = PBXGroup;
+			children = (
+				2F31175CD56FBCFD276426FE /* ACPClient.swift */,
+				08E7030EA9A2E834D15E3C1F /* ACPTransport.swift */,
+				60F474697C2B82BF67D7BAB9 /* ACPTypes.swift */,
+				F1A0D86A65CBFE21808B059D /* ReconnectionManager.swift */,
+			);
+			path = ACP;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		4B8C20E061D2629471C5073C /* Mino */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9F2E88B1CE499D1C0099FBE5 /* Build configuration list for PBXNativeTarget "Mino" */;
+			buildPhases = (
+				ACB1F6E6B609BAEF7B6A540F /* Sources */,
+				684C03A95DBB7E6B2B83198B /* Resources */,
+				83C566B904AD831BDDFF1AD4 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Mino;
+			packageProductDependencies = (
+				FC6FF2602FCC4CC6C856E34D /* MarkdownUI */,
+			);
+			productName = Mino;
+			productReference = 27F781FB423D7D7E9E6630F1 /* Mino.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		DFC4359E1E36468823B31C33 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+				};
+			};
+			buildConfigurationList = 9CC0ECB333FA7EA82A828208 /* Build configuration list for PBXProject "Mino" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 7ADBBA7A9F2E69E5ED168BCF;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				E0D583FCB9F54C64E7C2E910 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 04779582DC84B641F37F186B /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				4B8C20E061D2629471C5073C /* Mino */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		684C03A95DBB7E6B2B83198B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0E2B68264655DC8305138809 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		ACB1F6E6B609BAEF7B6A540F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2E3B1B5CF241AFB1DB87E86F /* ACPClient.swift in Sources */,
+				8561A7585C8AB0DA18AF60CD /* ACPTransport.swift in Sources */,
+				6C9647F572F1083ECC609212 /* ACPTypes.swift in Sources */,
+				021D035952BA280AADDB309D /* AddAgentView.swift in Sources */,
+				DEE21D6461241ED37DA87F59 /* Agent.swift in Sources */,
+				FB64DCEAAE4C9BC23374C8DE /* AppState.swift in Sources */,
+				C1A62964622B8248EF0F2EA7 /* AudioPlayerService.swift in Sources */,
+				BE8DA4957AADAEE9C7072920 /* ChatMessage.swift in Sources */,
+				3BA0BA1656E70FF118F5295F /* ChatView.swift in Sources */,
+				6206103FD5CC9817A047339B /* ConfirmationBubble.swift in Sources */,
+				F8F32DEFDD03A94D8E23A829 /* ContentBlock.swift in Sources */,
+				85165BF9CCD312759167106C /* ContentBlockParser.swift in Sources */,
+				7C39B9BD89B3839F48FCCCE2 /* ContentBlockView.swift in Sources */,
+				E61D5D2040A1787B41A55F9F /* ContentView.swift in Sources */,
+				0EA426B36047CF01805BE526 /* ConversationSegment.swift in Sources */,
+				800A6A3F9BF233838360D03A /* ImageBubble.swift in Sources */,
+				B4B6BF9C34B178F409853FB0 /* LocalImageProvider.swift in Sources */,
+				A12587A4C7529ACF9E4E1352 /* MarkdownContent.swift in Sources */,
+				7DB3BF557FE1EEBAB9905A25 /* MessageBubble.swift in Sources */,
+				7A7CD5F9F9A16848BE24AB0A /* MinoApp.swift in Sources */,
+				FEB7C3E602D0CE9B3EE9BC2C /* MinoTheme.swift in Sources */,
+				9AB80D01C5F53F53D05A32CE /* PersistenceService.swift in Sources */,
+				69FCEC006A0EAE6E3F42036D /* ReconnectionManager.swift in Sources */,
+				9D31BFED6E69A4644DB4D6A0 /* ResourceExtractor.swift in Sources */,
+				1A06958386CAA23E4CC1FE9C /* ResourceItem.swift in Sources */,
+				6A662344899D0651AC1CE2CE /* ResourcePanel.swift in Sources */,
+				93919512BD183240BF018A8B /* SettingsView.swift in Sources */,
+				449AD2CD1C01A910CE00DE9D /* SidebarView.swift in Sources */,
+				C0C389B40079B9B54B34A178 /* StreamingBubble.swift in Sources */,
+				B2862092CE2A607BB543D0C3 /* ThinkingSection.swift in Sources */,
+				ADD4D115802771ADC1A3BA42 /* ToolCallBubble.swift in Sources */,
+				ABFEA85C8FEE7AE812911FED /* ToolCallInfo.swift in Sources */,
+				203319223F074A7A9A8EAB59 /* VideoPlayerView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		2D9330122A4F8180C5679B08 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Mino/Mino.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Mino;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mino.app;
+				PRODUCT_NAME = Mino;
+				SDKROOT = macosx;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.9;
+			};
+			name = Release;
+		};
+		81A479C243465A07AC69CB52 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Mino/Mino.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Mino;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mino.app;
+				PRODUCT_NAME = Mino;
+				SDKROOT = macosx;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.9;
+			};
+			name = Debug;
+		};
+		9D25B4C55734CF7E014A8F85 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		A1144C06B6500C0C0E16DD7B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		9CC0ECB333FA7EA82A828208 /* Build configuration list for PBXProject "Mino" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1144C06B6500C0C0E16DD7B /* Debug */,
+				9D25B4C55734CF7E014A8F85 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		9F2E88B1CE499D1C0099FBE5 /* Build configuration list for PBXNativeTarget "Mino" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				81A479C243465A07AC69CB52 /* Debug */,
+				2D9330122A4F8180C5679B08 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		E0D583FCB9F54C64E7C2E910 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/gonzalezreal/swift-markdown-ui";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.4.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		FC6FF2602FCC4CC6C856E34D /* MarkdownUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E0D583FCB9F54C64E7C2E910 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */;
+			productName = MarkdownUI;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = DFC4359E1E36468823B31C33 /* Project object */;
+}
