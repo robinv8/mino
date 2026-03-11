@@ -1,7 +1,7 @@
 import SwiftUI
 import MarkdownUI
 
-/// 渲染单个 ContentBlock
+/// Renders a single ContentBlock
 struct ContentBlockView: View {
     let block: ContentBlock
     var onAction: ((String) -> Void)?
@@ -23,7 +23,7 @@ struct ContentBlockView: View {
     }
 }
 
-/// 渲染多个 blocks 的容器
+/// Container for rendering multiple blocks
 struct ContentBlocksView: View {
     let blocks: [ContentBlock]
     var onAction: ((String) -> Void)?
@@ -194,7 +194,7 @@ private struct LinkBlockView: View {
             }
         } label: {
             HStack(spacing: 10) {
-                // 预览图
+                // Preview image
                 if let imageURL = block.image {
                     AsyncImage(url: URL(string: imageURL)) { phase in
                         if let image = phase.image {
@@ -407,7 +407,7 @@ private struct ActionBlockView: View {
     }
 }
 
-// MARK: - Radio Block (单选)
+// MARK: - Radio Block (Single Select)
 
 private struct RadioBlockView: View {
     let block: RadioBlock
@@ -457,7 +457,7 @@ private struct RadioBlockView: View {
     }
 }
 
-// MARK: - Checkbox Block (多选)
+// MARK: - Checkbox Block (Multi Select)
 
 private struct CheckboxBlockView: View {
     let block: CheckboxBlock
@@ -514,7 +514,7 @@ private struct CheckboxBlockView: View {
     }
 }
 
-// MARK: - Dropdown Block (下拉选择)
+// MARK: - Dropdown Block
 
 private struct DropdownBlockView: View {
     let block: DropdownBlock

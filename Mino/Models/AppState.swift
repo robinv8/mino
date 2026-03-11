@@ -115,7 +115,7 @@ class AppState: ObservableObject {
             }
         }
 
-        // 每次连接后的首条消息自动注入 Content Spec 上下文
+        // Auto-inject Content Spec context into the first message after each connection
         let needsInjection = !contentSpecInjected.contains(agentId)
         let actualContent = needsInjection ? contentSpecContext + content : content
         if needsInjection { contentSpecInjected.insert(agentId) }
@@ -215,7 +215,7 @@ class AppState: ObservableObject {
     }
 
     private static func loadOpenClawCredentials() -> OpenClawCredentials {
-        // 沙箱 App 的 homeDirectory 指向容器，需要用真实 home 路径
+        // Sandboxed app's homeDirectory points to the container; use real home path instead
         let home: URL
         if let pw = getpwuid(getuid()), let dir = pw.pointee.pw_dir {
             home = URL(fileURLWithPath: String(cString: dir))
@@ -225,7 +225,7 @@ class AppState: ObservableObject {
         print("[Mino] Reading credentials from: \(home.path)")
         var creds = OpenClawCredentials()
 
-        // 读取设备身份
+        // Read device identity
         let devicePath = home.appendingPathComponent(".openclaw/identity/device.json")
         if let data = try? Data(contentsOf: devicePath),
            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
@@ -234,7 +234,7 @@ class AppState: ObservableObject {
             creds.privateKeyPem = json["privateKeyPem"] as? String
         }
 
-        // 读取 token
+        // Read auth token
         let authPath = home.appendingPathComponent(".openclaw/identity/device-auth.json")
         if let data = try? Data(contentsOf: authPath),
            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -245,7 +245,7 @@ class AppState: ObservableObject {
             creds.scopes = operator_["scopes"] as? [String] ?? ["operator.admin"]
         }
 
-        // 读取 gateway 密码
+        // Read gateway password
         let configPath = home.appendingPathComponent(".openclaw/openclaw.json")
         if let data = try? Data(contentsOf: configPath),
            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],

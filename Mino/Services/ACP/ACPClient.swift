@@ -187,7 +187,7 @@ actor ACPClient {
     private func handleChallenge() async {
         print("[ACP] Challenge received, sending connect request...")
 
-        // 构建 auth 参数：优先密码，fallback token
+        // Build auth params: prefer password, fallback to token
         var authParams: [String: Any]
         if let password = credentials.password {
             authParams = ["password": password]

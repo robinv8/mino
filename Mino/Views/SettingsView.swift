@@ -20,14 +20,14 @@ private struct ComponentsGalleryTab: View {
             VStack(alignment: .leading, spacing: 20) {
                 header
 
-                // 逐个展示每种 block
+                // Showcase each block type
                 sectionCard("text — Rich Text") {
                     ContentBlockView(block: .text(TextBlock(content: "This is **bold**, this is *italic*, and this is `inline code`.\n\n> A blockquote for emphasis.")))
                 }
 
                 sectionCard("image — Image") {
                     VStack(alignment: .leading, spacing: 8) {
-                        // 用 SwiftUI 生成示例图
+                        // Generate a sample image with SwiftUI
                         ZStack {
                             RoundedRectangle(cornerRadius: MinoTheme.cornerRadiusSmall, style: .continuous)
                                 .fill(LinearGradient(
@@ -140,10 +140,10 @@ private struct ComponentsGalleryTab: View {
                     )))
                 }
 
-                // mino-block 标签示例
+                // mino-block tag example
                 sectionCard("Inline Tag — <mino-block />") {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Agent 可在文本中嵌入标签：")
+                        Text("Agents can embed tags in text:")
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
                         Text(#"<mino-block type="image" url="/tmp/chart.png" caption="Revenue" />"#)
@@ -166,7 +166,7 @@ private struct ComponentsGalleryTab: View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Content Spec Components")
                 .font(.system(size: 16, weight: .bold))
-            Text("Mino 当前支持渲染的结构化内容组件预览")
+            Text("Preview of structured content components supported by Mino")
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
         }

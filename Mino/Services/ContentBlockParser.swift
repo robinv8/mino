@@ -4,7 +4,7 @@ enum ContentBlockParser {
 
     // MARK: - Parse JSON blocks
 
-    /// 解析 JSON 格式的 blocks 数组
+    /// Parse a JSON blocks array
     static func parseJSON(_ data: [String: Any]) -> [ContentBlock]? {
         guard let blocksArray = data["blocks"] as? [[String: Any]] else { return nil }
         var blocks: [ContentBlock] = []
@@ -16,7 +16,7 @@ enum ContentBlockParser {
         return blocks.isEmpty ? nil : blocks
     }
 
-    /// 从单个 dict 解码一个 ContentBlock
+    /// Decode a single ContentBlock from a dictionary
     private static func decodeBlock(_ dict: [String: Any]) -> ContentBlock? {
         guard let jsonData = try? JSONSerialization.data(withJSONObject: dict) else { return nil }
         return try? JSONDecoder().decode(ContentBlock.self, from: jsonData)
@@ -24,16 +24,16 @@ enum ContentBlockParser {
 
     // MARK: - Parse mino-block tags from text
 
-    /// 解析文本中的 <mino-block /> 标签，返回混合的 blocks 列表
-    /// 纯文本段 → TextBlock，标签 → 对应 block
+    /// Parse <mino-block /> tags from text, returning a mixed list of blocks
+    /// Plain text segments → TextBlock, tags → corresponding block
     static func parseInlineBlocks(_ text: String) -> [ContentBlock]? {
-        // Quick check: 有没有 mino-block 标签
+        // Quick check: any mino-block tags?
         guard text.contains("<mino-block") else { return nil }
 
         var blocks: [ContentBlock] = []
         let nsText = text as NSString
 
-        // 匹配 <mino-block type="..." attr="..." /> 或 <mino-block type="..." attr="...">content</mino-block>
+        // Match <mino-block type="..." attr="..." /> or <mino-block type="..." attr="...">content</mino-block>
         guard let regex = try? NSRegularExpression(
             pattern: #"<mino-block\s+([^>]*?)(?:\/>|>([\s\S]*?)<\/mino-block>)"#,
             options: []
@@ -44,7 +44,7 @@ enum ContentBlockParser {
 
         var lastEnd = 0
         for match in matches {
-            // 标签前的文本 → TextBlock
+            // Text before the tag → TextBlock
             let beforeRange = NSRange(location: lastEnd, length: match.range.location - lastEnd)
             if beforeRange.length > 0 {
                 let before = nsText.substring(with: beforeRange).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -53,7 +53,7 @@ enum ContentBlockParser {
                 }
             }
 
-            // 解析标签属性
+            // Parse tag attributes
             let attrsString = nsText.substring(with: match.range(at: 1))
             let innerContent = match.numberOfRanges > 2 && match.range(at: 2).location != NSNotFound
                 ? nsText.substring(with: match.range(at: 2))
@@ -67,7 +67,7 @@ enum ContentBlockParser {
             lastEnd = match.range.location + match.range.length
         }
 
-        // 标签后的剩余文本
+        // Remaining text after the last tag
         if lastEnd < nsText.length {
             let after = nsText.substring(from: lastEnd).trimmingCharacters(in: .whitespacesAndNewlines)
             if !after.isEmpty {
@@ -80,7 +80,7 @@ enum ContentBlockParser {
 
     // MARK: - Attribute Parsing
 
-    /// 解析 HTML-like 属性: key="value" key='value'
+    /// Parse HTML-like attributes: key="value" key='value'
     private static func parseAttributes(_ str: String) -> [String: String] {
         var attrs: [String: String] = [:]
         guard let regex = try? NSRegularExpression(
@@ -104,7 +104,7 @@ enum ContentBlockParser {
         return attrs
     }
 
-    /// 根据解析出的属性构建对应的 ContentBlock
+    /// Build the corresponding ContentBlock from parsed attributes
     private static func buildBlock(from attrs: [String: String], innerContent: String?) -> ContentBlock? {
         guard let type = attrs["type"] else { return nil }
 

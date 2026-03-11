@@ -1,6 +1,6 @@
 import Foundation
 
-/// Content Spec v0.1 — 结构化内容块
+/// Content Spec v0.1 — Structured content blocks
 enum ContentBlock: Codable, Identifiable, Hashable {
     case text(TextBlock)
     case image(ImageBlock)
@@ -12,7 +12,7 @@ enum ContentBlock: Codable, Identifiable, Hashable {
     case radio(RadioBlock)
     case checkbox(CheckboxBlock)
     case dropdown(DropdownBlock)
-    case unknown(String) // 不认识的类型，优雅降级
+    case unknown(String) // Unrecognized type, graceful fallback
 
     var id: String {
         switch self {
@@ -300,7 +300,7 @@ struct SelectionOption: Codable, Hashable, Identifiable {
     }
 }
 
-// MARK: - Radio Block (单选)
+// MARK: - Radio Block (Single Select)
 
 struct RadioBlock: Codable, Hashable, Identifiable {
     let id: String
@@ -331,7 +331,7 @@ struct RadioBlock: Codable, Hashable, Identifiable {
     }
 }
 
-// MARK: - Checkbox Block (多选)
+// MARK: - Checkbox Block (Multi Select)
 
 struct CheckboxBlock: Codable, Hashable, Identifiable {
     let id: String
@@ -362,7 +362,7 @@ struct CheckboxBlock: Codable, Hashable, Identifiable {
     }
 }
 
-// MARK: - Dropdown Block (下拉选择)
+// MARK: - Dropdown Block
 
 struct DropdownBlock: Codable, Hashable, Identifiable {
     let id: String
