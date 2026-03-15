@@ -10,8 +10,8 @@ struct ChatView: View {
     /// When loading history, store the ID of the previously-first visible message
     /// so we can restore scroll position after prepending older messages.
     @State private var anchorBeforeHistoryLoad: UUID?
-    /// True while a history load is in progress — suppresses auto-scroll-to-bottom.
-    @State private var isRestoringScrollPosition = false
+    /// Tracks the last agent ID loaded by .task — used to detect agent switches.
+    @State private var lastLoadedAgentId: String?
 
     /// Key that changes only when conversation structure changes (message added/removed).
     private var cacheKey: String {
@@ -56,7 +56,6 @@ struct ChatView: View {
                                         if case .toolCallGroup = $0 { return true }
                                         return false
                                     })?.firstMessageId
-                                    isRestoringScrollPosition = true
                                     appState.loadMoreHistory(agentId: agentId)
                                 }
                         }
@@ -92,32 +91,33 @@ struct ChatView: View {
                     .padding(20)
                 }
                 .onChange(of: lastMessageId) {
-                    // Don't auto-scroll to bottom while restoring position after history load
-                    if !isRestoringScrollPosition {
+                    // Only auto-scroll when Mino is actively generating a response.
+                    // Watcher-pushed external messages should NOT pull user to bottom.
+                    if let agentId = appState.activeAgentId,
+                       appState.generatingAgentIds.contains(agentId) {
                         scrollToBottom(proxy)
                     }
                 }
                 .onChange(of: appState.isGenerating) { _, generating in
-                    if generating {
-                        isRestoringScrollPosition = false
-                        scrollToBottom(proxy)
-                    }
+                    if generating { scrollToBottom(proxy) }
                 }
                 .task(id: cacheKey) {
                     cachedGroupedMessages = Self.computeGroupedMessages(
                         segments: appState.conversations[appState.activeAgentId ?? ""]
                     )
-                    // After loading older history, restore scroll to the message that was
-                    // previously at the top, so the user's viewport doesn't jump.
+
                     if let anchor = anchorBeforeHistoryLoad {
+                        // History load: restore scroll to the message that was at the top.
                         anchorBeforeHistoryLoad = nil
                         DispatchQueue.main.async {
                             proxy.scrollTo(anchor, anchor: .top)
-                            isRestoringScrollPosition = false
                         }
-                    } else if !isRestoringScrollPosition {
+                    } else if appState.activeAgentId != lastLoadedAgentId {
+                        // Initial load or agent switch: scroll to bottom.
                         scrollToBottom(proxy)
                     }
+                    // Otherwise (watcher messages, etc.): don't scroll.
+                    lastLoadedAgentId = appState.activeAgentId
                 }
             }
 
