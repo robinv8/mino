@@ -42,6 +42,7 @@ targets:
         com.apple.security.app-sandbox: false
         com.apple.security.network.client: true
         com.apple.security.files.user-selected.read-write: true
+        com.apple.security.files.all: true
 
   MinoTests:
     type: bundle.unit-test
