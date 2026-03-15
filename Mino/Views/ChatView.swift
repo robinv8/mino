@@ -12,6 +12,10 @@ struct ChatView: View {
     @State private var anchorBeforeHistoryLoad: UUID?
     /// Agents that have been visited — first visit scrolls to bottom, subsequent visits preserve position.
     @State private var visitedAgentIds: Set<String> = []
+    /// Current scroll position tracked by scrollPosition(id:).
+    @State private var scrollPositionId: String?
+    /// Saved scroll positions per agent — restored when switching back.
+    @State private var savedScrollPositions: [String: String] = [:]
 
     /// Key that changes only when conversation structure changes (message added/removed).
     private var cacheKey: String {
@@ -90,6 +94,13 @@ struct ChatView: View {
                     }
                     .padding(20)
                 }
+                .scrollPosition(id: $scrollPositionId, anchor: .top)
+                .onChange(of: appState.activeAgentId) { oldId, newId in
+                    // Save scroll position for the agent we're leaving
+                    if let oldId, let pos = scrollPositionId {
+                        savedScrollPositions[oldId] = pos
+                    }
+                }
                 .onChange(of: lastMessageId) {
                     // Only auto-scroll when Mino is actively generating a response.
                     // Watcher-pushed external messages should NOT pull user to bottom.
@@ -117,8 +128,14 @@ struct ChatView: View {
                         // First visit to this agent: scroll to bottom.
                         visitedAgentIds.insert(agentId)
                         scrollToBottom(proxy)
+                    } else if let agentId = appState.activeAgentId,
+                              let savedPos = savedScrollPositions[agentId] {
+                        // Returning to a visited agent: restore saved scroll position.
+                        DispatchQueue.main.async {
+                            scrollPositionId = savedPos
+                        }
                     }
-                    // Otherwise (agent revisit, watcher messages, etc.): preserve position.
+                    // Otherwise (watcher messages, etc.): don't scroll.
                 }
             }
 
