@@ -645,3 +645,203 @@ final class ClaudeSessionLoaderStreamTests: XCTestCase {
         XCTAssertEqual(messages[0].content, "Only line")
     }
 }
+
+// MARK: - ScrollPolicy
+
+final class ScrollPolicyTests: XCTestCase {
+
+    private func baseContext(
+        activeAgentId: String? = "agent-1",
+        generatingAgentIds: Set<String> = [],
+        isGenerating: Bool = false,
+        visitedAgentIds: Set<String> = [],
+        anchorBeforeHistoryLoad: UUID? = nil,
+        savedScrollPositions: [String: String] = [:]
+    ) -> ScrollContext {
+        ScrollContext(
+            activeAgentId: activeAgentId,
+            generatingAgentIds: generatingAgentIds,
+            isGenerating: isGenerating,
+            visitedAgentIds: visitedAgentIds,
+            anchorBeforeHistoryLoad: anchorBeforeHistoryLoad,
+            savedScrollPositions: savedScrollPositions
+        )
+    }
+
+    // MARK: onNewMessage
+
+    func testNewMessage_whileGenerating_scrollsToBottom() {
+        let ctx = baseContext(generatingAgentIds: ["agent-1"])
+        XCTAssertEqual(ScrollPolicy.onNewMessage(context: ctx), .scrollToBottom)
+    }
+
+    func testNewMessage_notGenerating_doesNotScroll() {
+        let ctx = baseContext(generatingAgentIds: [])
+        XCTAssertEqual(ScrollPolicy.onNewMessage(context: ctx), .none)
+    }
+
+    func testNewMessage_differentAgentGenerating_doesNotScroll() {
+        let ctx = baseContext(
+            activeAgentId: "agent-1",
+            generatingAgentIds: ["agent-2"]
+        )
+        XCTAssertEqual(ScrollPolicy.onNewMessage(context: ctx), .none)
+    }
+
+    func testNewMessage_noActiveAgent_doesNotScroll() {
+        let ctx = baseContext(activeAgentId: nil, generatingAgentIds: ["agent-1"])
+        XCTAssertEqual(ScrollPolicy.onNewMessage(context: ctx), .none)
+    }
+
+    // MARK: onGeneratingChanged
+
+    func testGeneratingStarted_scrollsToBottom() {
+        XCTAssertEqual(ScrollPolicy.onGeneratingChanged(isGenerating: true), .scrollToBottom)
+    }
+
+    func testGeneratingStopped_doesNotScroll() {
+        XCTAssertEqual(ScrollPolicy.onGeneratingChanged(isGenerating: false), .none)
+    }
+
+    // MARK: onCacheUpdated — history load
+
+    func testCacheUpdated_withAnchor_restoresAnchor() {
+        let anchor = UUID()
+        let ctx = baseContext(anchorBeforeHistoryLoad: anchor)
+        XCTAssertEqual(ScrollPolicy.onCacheUpdated(context: ctx), .restoreAnchor(anchor))
+    }
+
+    func testCacheUpdated_anchorTakesPrecedenceOverFirstVisit() {
+        // Even if agent is not visited, anchor wins
+        let anchor = UUID()
+        let ctx = baseContext(
+            visitedAgentIds: [],
+            anchorBeforeHistoryLoad: anchor
+        )
+        XCTAssertEqual(ScrollPolicy.onCacheUpdated(context: ctx), .restoreAnchor(anchor))
+    }
+
+    // MARK: onCacheUpdated — first visit
+
+    func testCacheUpdated_firstVisit_scrollsToBottom() {
+        let ctx = baseContext(visitedAgentIds: [])
+        XCTAssertEqual(ScrollPolicy.onCacheUpdated(context: ctx), .scrollToBottom)
+    }
+
+    func testCacheUpdated_firstVisitNoActiveAgent_doesNotScroll() {
+        let ctx = baseContext(activeAgentId: nil, visitedAgentIds: [])
+        XCTAssertEqual(ScrollPolicy.onCacheUpdated(context: ctx), .none)
+    }
+
+    // MARK: onCacheUpdated — revisit with saved position
+
+    func testCacheUpdated_revisitWithSavedPosition_restoresSaved() {
+        let ctx = baseContext(
+            visitedAgentIds: ["agent-1"],
+            savedScrollPositions: ["agent-1": "msg-42"]
+        )
+        XCTAssertEqual(ScrollPolicy.onCacheUpdated(context: ctx), .restoreSaved("msg-42"))
+    }
+
+    // MARK: onCacheUpdated — revisit without saved position
+
+    func testCacheUpdated_revisitNoSavedPosition_doesNotScroll() {
+        let ctx = baseContext(
+            visitedAgentIds: ["agent-1"],
+            savedScrollPositions: [:]
+        )
+        XCTAssertEqual(ScrollPolicy.onCacheUpdated(context: ctx), .none)
+    }
+
+    // MARK: onCacheUpdated — watcher message (no scroll)
+
+    func testCacheUpdated_watcherMessage_doesNotScroll() {
+        // Agent already visited, no anchor, no saved position
+        let ctx = baseContext(
+            visitedAgentIds: ["agent-1"],
+            savedScrollPositions: [:]
+        )
+        XCTAssertEqual(ScrollPolicy.onCacheUpdated(context: ctx), .none)
+    }
+
+    // MARK: Scenario: user browsing history, watcher pushes message
+
+    func testScenario_browsingHistory_watcherPush() {
+        // User is on agent-1, not generating, scrolled up
+        let ctx = baseContext(
+            activeAgentId: "agent-1",
+            generatingAgentIds: [],
+            visitedAgentIds: ["agent-1"]
+        )
+        // Watcher pushes a new message → lastMessageId changes
+        XCTAssertEqual(ScrollPolicy.onNewMessage(context: ctx), .none,
+            "Watcher messages should not auto-scroll")
+        // cacheKey changes from bumpConversationVersion
+        XCTAssertEqual(ScrollPolicy.onCacheUpdated(context: ctx), .none,
+            "Watcher-triggered cache update should not scroll")
+    }
+
+    // MARK: Scenario: user sends message while browsing history
+
+    func testScenario_sendMessageWhileBrowsingHistory() {
+        // User was browsing, then sends a message → isGenerating becomes true
+        XCTAssertEqual(ScrollPolicy.onGeneratingChanged(isGenerating: true), .scrollToBottom,
+            "Sending a message should scroll to bottom")
+
+        // New messages arrive during generation
+        let ctx = baseContext(
+            activeAgentId: "agent-1",
+            generatingAgentIds: ["agent-1"],
+            visitedAgentIds: ["agent-1"]
+        )
+        XCTAssertEqual(ScrollPolicy.onNewMessage(context: ctx), .scrollToBottom,
+            "New messages during generation should auto-scroll")
+    }
+
+    // MARK: Scenario: switch agents preserves position
+
+    func testScenario_switchAgentAndReturn() {
+        // Step 1: First visit agent-1 → scrollToBottom
+        let ctx1 = baseContext(
+            activeAgentId: "agent-1",
+            visitedAgentIds: []
+        )
+        XCTAssertEqual(ScrollPolicy.onCacheUpdated(context: ctx1), .scrollToBottom)
+
+        // Step 2: User scrolls up, then switches to agent-2 (first visit)
+        let ctx2 = baseContext(
+            activeAgentId: "agent-2",
+            visitedAgentIds: ["agent-1"]
+        )
+        XCTAssertEqual(ScrollPolicy.onCacheUpdated(context: ctx2), .scrollToBottom)
+
+        // Step 3: Switch back to agent-1 with saved position
+        let ctx3 = baseContext(
+            activeAgentId: "agent-1",
+            visitedAgentIds: ["agent-1", "agent-2"],
+            savedScrollPositions: ["agent-1": "msg-100"]
+        )
+        XCTAssertEqual(ScrollPolicy.onCacheUpdated(context: ctx3), .restoreSaved("msg-100"))
+    }
+
+    // MARK: Scenario: load history prepend
+
+    func testScenario_loadHistoryThenNewMessage() {
+        let anchor = UUID()
+
+        // Step 1: History loaded, anchor set
+        let ctx1 = baseContext(
+            visitedAgentIds: ["agent-1"],
+            anchorBeforeHistoryLoad: anchor
+        )
+        XCTAssertEqual(ScrollPolicy.onCacheUpdated(context: ctx1), .restoreAnchor(anchor))
+
+        // Step 2: After anchor is consumed, watcher pushes message
+        let ctx2 = baseContext(
+            visitedAgentIds: ["agent-1"],
+            anchorBeforeHistoryLoad: nil
+        )
+        XCTAssertEqual(ScrollPolicy.onNewMessage(context: ctx2), .none,
+            "After history load, watcher messages should not scroll")
+    }
+}

@@ -102,40 +102,40 @@ struct ChatView: View {
                     }
                 }
                 .onChange(of: lastMessageId) {
-                    // Only auto-scroll when Mino is actively generating a response.
-                    // Watcher-pushed external messages should NOT pull user to bottom.
-                    if let agentId = appState.activeAgentId,
-                       appState.generatingAgentIds.contains(agentId) {
+                    let ctx = makeScrollContext()
+                    if ScrollPolicy.onNewMessage(context: ctx) == .scrollToBottom {
                         scrollToBottom(proxy)
                     }
                 }
                 .onChange(of: appState.isGenerating) { _, generating in
-                    if generating { scrollToBottom(proxy) }
+                    if ScrollPolicy.onGeneratingChanged(isGenerating: generating) == .scrollToBottom {
+                        scrollToBottom(proxy)
+                    }
                 }
                 .task(id: cacheKey) {
                     cachedGroupedMessages = Self.computeGroupedMessages(
                         segments: appState.conversations[appState.activeAgentId ?? ""]
                     )
 
-                    if let anchor = anchorBeforeHistoryLoad {
-                        // History load: restore scroll to the message that was at the top.
+                    let ctx = makeScrollContext()
+                    switch ScrollPolicy.onCacheUpdated(context: ctx) {
+                    case .restoreAnchor(let anchor):
                         anchorBeforeHistoryLoad = nil
                         DispatchQueue.main.async {
                             proxy.scrollTo(anchor, anchor: .top)
                         }
-                    } else if let agentId = appState.activeAgentId,
-                              !visitedAgentIds.contains(agentId) {
-                        // First visit to this agent: scroll to bottom.
-                        visitedAgentIds.insert(agentId)
-                        scrollToBottom(proxy)
-                    } else if let agentId = appState.activeAgentId,
-                              let savedPos = savedScrollPositions[agentId] {
-                        // Returning to a visited agent: restore saved scroll position.
-                        DispatchQueue.main.async {
-                            scrollPositionId = savedPos
+                    case .scrollToBottom:
+                        if let agentId = appState.activeAgentId {
+                            visitedAgentIds.insert(agentId)
                         }
+                        scrollToBottom(proxy)
+                    case .restoreSaved(let pos):
+                        DispatchQueue.main.async {
+                            scrollPositionId = pos
+                        }
+                    case .none:
+                        break
                     }
-                    // Otherwise (watcher messages, etc.): don't scroll.
                 }
             }
 
@@ -377,6 +377,17 @@ struct ChatView: View {
         }
     }
 
+    private func makeScrollContext() -> ScrollContext {
+        ScrollContext(
+            activeAgentId: appState.activeAgentId,
+            generatingAgentIds: appState.generatingAgentIds,
+            isGenerating: appState.isGenerating,
+            visitedAgentIds: visitedAgentIds,
+            anchorBeforeHistoryLoad: anchorBeforeHistoryLoad,
+            savedScrollPositions: savedScrollPositions
+        )
+    }
+
     private func scrollToBottom(_ proxy: ScrollViewProxy) {
         guard let lastId = lastMessageId else { return }
         // Defer to next run loop to avoid publishing changes during view updates
@@ -413,6 +424,62 @@ struct ChatView: View {
         Task {
             await appState.sendMessage(trimmed)
         }
+    }
+}
+
+// MARK: - Scroll Policy
+
+/// Pure-value scroll decision — testable without SwiftUI.
+enum ScrollAction: Equatable {
+    /// Scroll to the very bottom of the conversation.
+    case scrollToBottom
+    /// Restore scroll to a specific message (e.g., after history prepend).
+    case restoreAnchor(UUID)
+    /// Restore a saved position for a returning agent.
+    case restoreSaved(String)
+    /// Do nothing — keep the current scroll position.
+    case none
+}
+
+/// All inputs that influence scroll decisions, gathered into one struct.
+struct ScrollContext {
+    var activeAgentId: String?
+    var generatingAgentIds: Set<String>
+    var isGenerating: Bool
+    var visitedAgentIds: Set<String>
+    var anchorBeforeHistoryLoad: UUID?
+    var savedScrollPositions: [String: String]
+}
+
+enum ScrollPolicy {
+    /// Decide what to do when `lastMessageId` changes (new message appended).
+    static func onNewMessage(context: ScrollContext) -> ScrollAction {
+        guard let agentId = context.activeAgentId,
+              context.generatingAgentIds.contains(agentId) else {
+            return .none
+        }
+        return .scrollToBottom
+    }
+
+    /// Decide what to do when `isGenerating` changes.
+    static func onGeneratingChanged(isGenerating: Bool) -> ScrollAction {
+        isGenerating ? .scrollToBottom : .none
+    }
+
+    /// Decide what to do after conversation cache is recomputed (cacheKey changed).
+    static func onCacheUpdated(context: ScrollContext) -> ScrollAction {
+        if let anchor = context.anchorBeforeHistoryLoad {
+            return .restoreAnchor(anchor)
+        }
+        if let agentId = context.activeAgentId,
+           !context.visitedAgentIds.contains(agentId) {
+            return .scrollToBottom
+        }
+        if let agentId = context.activeAgentId,
+           let savedPos = context.savedScrollPositions[agentId] {
+            return .restoreSaved(savedPos)
+        }
+        return .none
     }
 }
 
