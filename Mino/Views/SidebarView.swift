@@ -17,7 +17,8 @@ struct SidebarView: View {
                 AgentRow(
                     agent: agent,
                     lastMessage: lastMessage(for: agent.id),
-                    unreadCount: appState.unreadCounts[agent.id] ?? 0
+                    unreadCount: appState.unreadCounts[agent.id] ?? 0,
+                    isWorking: appState.generatingAgentIds.contains(agent.id) || agent.status == .cliActive
                 )
                 .tag(agent.id)
                 .contextMenu {
@@ -74,16 +75,49 @@ struct AgentRow: View {
     let agent: Agent
     let lastMessage: String?
     let unreadCount: Int
+    let isWorking: Bool
 
     var body: some View {
         HStack(spacing: 10) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(MinoTheme.avatarGradient(for: agent.name))
-                    .frame(width: 36, height: 36)
-                Text(String(agent.name.prefix(1)))
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
+            ZStack(alignment: .bottomTrailing) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(agent.type == .claudeCode
+                              ? LinearGradient(colors: [Color.orange, Color.red.opacity(0.8)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                              : MinoTheme.avatarGradient(for: agent.name))
+                        .frame(width: 36, height: 36)
+                    if agent.type == .claudeCode {
+                        Image(systemName: "terminal")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.white)
+                    } else {
+                        Text(String(agent.name.prefix(1)))
+                            .font(.system(size: 14, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                    }
+                }
+
+                // Working / done indicator
+                if isWorking {
+                    ProgressView()
+                        .controlSize(.mini)
+                        .background(
+                            Circle()
+                                .fill(Color(.windowBackgroundColor))
+                                .frame(width: 14, height: 14)
+                        )
+                        .offset(x: 3, y: 3)
+                } else if lastMessage != nil {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.green)
+                        .background(
+                            Circle()
+                                .fill(Color(.windowBackgroundColor))
+                                .frame(width: 10, height: 10)
+                        )
+                        .offset(x: 3, y: 3)
+                }
             }
 
             VStack(alignment: .leading, spacing: 2) {
@@ -103,7 +137,12 @@ struct AgentRow: View {
                     }
                 }
 
-                if let preview = lastMessage {
+                if isWorking {
+                    Text("Working...")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.orange)
+                        .lineLimit(1)
+                } else if let preview = lastMessage {
                     Text(preview)
                         .font(.system(size: 11))
                         .foregroundStyle(.tertiary)
@@ -129,6 +168,7 @@ struct AgentRow: View {
         case .disconnected: .gray
         case .connecting: .orange
         case .reconnecting: .orange
+        case .cliActive: .orange
         }
     }
 
@@ -138,6 +178,7 @@ struct AgentRow: View {
         case .disconnected: "Disconnected"
         case .connecting: "Connecting..."
         case .reconnecting(let attempt): "Reconnecting (\(attempt))..."
+        case .cliActive: "CLI Working..."
         }
     }
 }

@@ -12,10 +12,10 @@ struct ContentView: View {
                 ChatView()
                     .frame(maxWidth: .infinity)
 
-                if appState.isResourcePanelVisible {
+                if appState.isTaskPanelVisible {
                     Divider()
-                    ResourcePanel()
-                        .frame(width: 260)
+                    TaskPanel()
+                        .frame(width: 320)
                         .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }
@@ -23,13 +23,13 @@ struct ContentView: View {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
                         withAnimation(.easeInOut(duration: 0.2)) {
-                            appState.isResourcePanelVisible.toggle()
+                            appState.isTaskPanelVisible.toggle()
                         }
                     } label: {
-                        Image(systemName: "sidebar.right")
-                            .foregroundStyle(appState.isResourcePanelVisible ? MinoTheme.accent : .secondary)
+                        Image(systemName: "checklist")
+                            .foregroundStyle(appState.isTaskPanelVisible ? MinoTheme.accent : .secondary)
                     }
-                    .help("Toggle Resources Panel")
+                    .help("Toggle Tasks Panel")
                 }
             }
         }

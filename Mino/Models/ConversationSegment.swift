@@ -5,4 +5,6 @@ struct ConversationSegment: Identifiable, Codable {
     let agentId: String
     let startDate: Date
     var messages: [ChatMessage]
+    /// Claude Code session ID for `--resume`. Only set after receiving a system event from Claude CLI.
+    var claudeSessionId: String?
 }

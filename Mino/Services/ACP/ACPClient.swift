@@ -173,9 +173,9 @@ actor ACPClient {
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
             self.challengeContinuation = cont
 
-            // Timeout after 10 seconds
+            // Timeout after 3 seconds
             Task {
-                try? await Task.sleep(nanoseconds: 10_000_000_000)
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
                 if let cont = self.challengeContinuation {
                     self.challengeContinuation = nil
                     cont.resume(throwing: ACPClientError.connectionTimeout)

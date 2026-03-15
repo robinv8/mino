@@ -386,7 +386,7 @@ struct TaskRow: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 6) {
                 if let info = item.toolCallInfo {
-                    statusIcon(info.status)
+                    ToolCallStatusIcon(status: info.status)
                     let formatted = ToolCallFormatter.summary(toolName: info.toolName, arguments: info.arguments)
                     Image(systemName: formatted.icon)
                         .foregroundStyle(.secondary)
@@ -452,22 +452,6 @@ struct TaskRow: View {
         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 
-    @ViewBuilder
-    private func statusIcon(_ status: ToolCallStatus) -> some View {
-        switch status {
-        case .running:
-            ProgressView()
-                .controlSize(.mini)
-        case .completed:
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(.green)
-                .font(.system(size: 11))
-        case .failed:
-            Image(systemName: "xmark.circle.fill")
-                .foregroundStyle(.red)
-                .font(.system(size: 11))
-        }
-    }
 }
 
 // MARK: - Environment Pill

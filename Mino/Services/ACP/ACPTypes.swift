@@ -77,6 +77,8 @@ enum SessionUpdate {
     case lifecycleEnd
     case image(url: String, caption: String?)
     case contentBlocks([ContentBlock])
+    case sessionResult(durationMs: Int, costUsd: Double)
+    case systemInfo(model: String, tools: [String], sessionId: String? = nil)
 }
 
 // MARK: - AnyCodable (lightweight)

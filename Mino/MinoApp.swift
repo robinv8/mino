@@ -12,6 +12,9 @@ struct MinoApp: App {
                 .task {
                     await appState.loadData()
                 }
+                .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+                    appState.clearDockBadge()
+                }
         }
         .windowStyle(.titleBar)
         .defaultSize(width: 1200, height: 800)

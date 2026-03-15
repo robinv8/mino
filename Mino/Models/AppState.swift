@@ -110,6 +110,13 @@ class AppState: ObservableObject {
     private var contentSpecInjected: Set<String> = []
     /// Tracks which agents have already loaded Claude Code history
     private var claudeHistoryLoaded: Set<String> = []
+    /// Remaining older sessions available for on-demand loading, keyed by agentId.
+    private var pendingClaudeSessions: [String: [ClaudeSessionSummary]] = [:]
+    /// Skipped (earlier) message count per session file, keyed by "agentId:sessionId".
+    private var skippedMessageCounts: [String: Int] = [:]
+    /// File paths per session, keyed by "agentId:sessionId".
+    private var sessionFilePaths: [String: URL] = [:]
+    @Published var isLoadingMoreHistory: Bool = false
     /// File watchers for live CLI session sync
     private var sessionWatchers: [String: ClaudeSessionWatcher] = [:]
     /// Timers to reset agent status after CLI inactivity
@@ -124,15 +131,6 @@ class AppState: ObservableObject {
         agents.first { $0.id == activeAgentId }
     }
 
-    var activeMessages: [ChatMessage] {
-        guard let id = activeAgentId else { return [] }
-        return conversations[id]?.flatMap(\.messages) ?? []
-    }
-
-    var activeSegments: [ConversationSegment] {
-        guard let id = activeAgentId else { return [] }
-        return conversations[id] ?? []
-    }
 
     // MARK: - Lifecycle
 
@@ -878,7 +876,11 @@ class AppState: ObservableObject {
     }
 
     private func findMessage(id: UUID, agentId: String) -> ChatMessage? {
-        conversations[agentId]?.flatMap(\.messages).first { $0.id == id }
+        guard let segments = conversations[agentId] else { return nil }
+        for segment in segments.reversed() {
+            if let msg = segment.messages.first(where: { $0.id == id }) { return msg }
+        }
+        return nil
     }
 
     // MARK: - Private: Content Spec Injection
@@ -943,7 +945,8 @@ class AppState: ObservableObject {
 
     @Published var isLoadingHistory: Bool = false
 
-    /// Load all Claude Code JSONL sessions for an agent in background, publish once.
+    /// Load the tail of the most recent Claude Code session for an agent.
+    /// Only loads the last ~50 messages; older messages and sessions are loaded on scroll.
     func loadClaudeCodeHistory(agentId: String) {
         guard !claudeHistoryLoaded.contains(agentId) else { return }
         guard let agent = agents.first(where: { $0.id == agentId }),
@@ -955,16 +958,109 @@ class AppState: ObservableObject {
         isLoadingHistory = true
 
         Task {
-            let segments = await Task.detached(priority: .userInitiated) {
-                ClaudeSessionLoader.loadAllSessions(for: cwd, agentId: agentId)
+            let result = await Task.detached(priority: .userInitiated) {
+                ClaudeSessionLoader.loadMostRecentSession(for: cwd, agentId: agentId, tailCount: 50)
             }.value
 
-            if !segments.isEmpty {
-                conversations[agentId] = segments
+            if let segment = result.segment {
+                conversations[agentId] = [segment]
                 bumpConversationVersion()
                 rebuildTaskData(agentId: agentId)
+
+                // Track skipped messages for this session
+                if result.skippedMessagesInSession > 0 {
+                    let key = "\(agentId):\(segment.id)"
+                    skippedMessageCounts[key] = result.skippedMessagesInSession
+                    // Find the file path for this session
+                    if let projectDir = ClaudeSessionLoader.projectDir(for: cwd) {
+                        sessionFilePaths[key] = projectDir
+                            .appendingPathComponent(segment.id)
+                            .appendingPathExtension("jsonl")
+                    }
+                }
+            }
+            if !result.olderSessions.isEmpty {
+                pendingClaudeSessions[agentId] = result.olderSessions
             }
             isLoadingHistory = false
+        }
+    }
+
+    /// Whether more history is available: either skipped messages in current session,
+    /// or older sessions not yet loaded.
+    func hasMoreHistory(agentId: String) -> Bool {
+        // Check skipped messages in the first (oldest loaded) segment
+        if let segments = conversations[agentId], let first = segments.first {
+            let key = "\(agentId):\(first.id)"
+            if (skippedMessageCounts[key] ?? 0) > 0 { return true }
+        }
+        // Check older sessions
+        return !(pendingClaudeSessions[agentId]?.isEmpty ?? true)
+    }
+
+    /// Counter that changes on each load — used as SwiftUI view identity for scroll trigger.
+    func pendingHistoryCount(agentId: String) -> Int {
+        let sessionCount = pendingClaudeSessions[agentId]?.count ?? 0
+        let skippedCount: Int
+        if let segments = conversations[agentId], let first = segments.first {
+            skippedCount = skippedMessageCounts["\(agentId):\(first.id)"] ?? 0
+        } else {
+            skippedCount = 0
+        }
+        return sessionCount * 10000 + skippedCount
+    }
+
+    /// Load more history for an agent (triggered by scroll-to-top).
+    /// First loads skipped messages within the current session, then older sessions.
+    func loadMoreHistory(agentId: String) {
+        guard !isLoadingMoreHistory else { return }
+
+        // Priority 1: Load earlier messages from the oldest loaded session
+        if let segments = conversations[agentId], let first = segments.first {
+            let key = "\(agentId):\(first.id)"
+            if let skipped = skippedMessageCounts[key], skipped > 0,
+               let filePath = sessionFilePaths[key] {
+                isLoadingMoreHistory = true
+                let currentSkipped = skipped
+                Task {
+                    let (messages, newSkipped) = await Task.detached(priority: .userInitiated) {
+                        ClaudeSessionLoader.loadEarlierMessages(
+                            from: filePath, currentSkipped: currentSkipped, count: 50
+                        )
+                    }.value
+
+                    if !messages.isEmpty, var segs = conversations[agentId] {
+                        segs[0].messages.insert(contentsOf: messages, at: 0)
+                        conversations[agentId] = segs
+                        bumpConversationVersion()
+                    }
+                    skippedMessageCounts[key] = newSkipped
+                    isLoadingMoreHistory = false
+                }
+                return
+            }
+        }
+
+        // Priority 2: Load the next older session
+        guard var pending = pendingClaudeSessions[agentId], !pending.isEmpty else { return }
+        let next = pending.removeFirst()
+        pendingClaudeSessions[agentId] = pending
+        isLoadingMoreHistory = true
+
+        Task {
+            let segment = await Task.detached(priority: .userInitiated) {
+                ClaudeSessionLoader.loadSession(next, agentId: agentId)
+            }.value
+
+            if let segment {
+                if conversations[agentId] != nil {
+                    conversations[agentId]!.insert(segment, at: 0)
+                } else {
+                    conversations[agentId] = [segment]
+                }
+                bumpConversationVersion()
+            }
+            isLoadingMoreHistory = false
         }
     }
 

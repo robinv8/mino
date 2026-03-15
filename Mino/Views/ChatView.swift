@@ -7,6 +7,11 @@ struct ChatView: View {
 
     // Cached grouped messages — only recomputed when conversations or active agent change
     @State private var cachedGroupedMessages: [MessageGroupItem] = []
+    /// When loading history, store the ID of the previously-first visible message
+    /// so we can restore scroll position after prepending older messages.
+    @State private var anchorBeforeHistoryLoad: UUID?
+    /// True while a history load is in progress — suppresses auto-scroll-to-bottom.
+    @State private var isRestoringScrollPosition = false
 
     /// Key that changes only when conversation structure changes (message added/removed).
     private var cacheKey: String {
@@ -31,11 +36,29 @@ struct ChatView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: MinoTheme.messageSpacing) {
-                        if appState.isLoadingHistory {
+                        if appState.isLoadingHistory || appState.isLoadingMoreHistory {
                             ProgressView("Loading history...")
                                 .controlSize(.small)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 20)
+                        } else if let agentId = appState.activeAgentId,
+                                  appState.hasMoreHistory(agentId: agentId) {
+                            // Scroll-to-top trigger: loads older sessions on appear.
+                            // id changes after each load so SwiftUI recreates the view,
+                            // re-firing onAppear for continuous scroll-back loading.
+                            Color.clear
+                                .frame(height: 1)
+                                .id("load-more-\(appState.pendingHistoryCount(agentId: agentId))")
+                                .onAppear {
+                                    // Remember the first message so we can restore scroll position
+                                    anchorBeforeHistoryLoad = cachedGroupedMessages.first(where: {
+                                        if case .single = $0 { return true }
+                                        if case .toolCallGroup = $0 { return true }
+                                        return false
+                                    })?.firstMessageId
+                                    isRestoringScrollPosition = true
+                                    appState.loadMoreHistory(agentId: agentId)
+                                }
                         }
 
                         if cachedGroupedMessages.isEmpty && !appState.isLoadingHistory {
@@ -62,24 +85,39 @@ struct ChatView: View {
                                 .id(message.id)
                             case .toolCallGroup(let messages):
                                 ToolCallGroupBubble(messages: messages)
-                                    .id(messages.first!.id)
+                                    .id(messages.first?.id ?? UUID())
                             }
                         }
                     }
                     .padding(20)
                 }
                 .onChange(of: lastMessageId) {
-                    scrollToBottom(proxy)
+                    // Don't auto-scroll to bottom while restoring position after history load
+                    if !isRestoringScrollPosition {
+                        scrollToBottom(proxy)
+                    }
                 }
                 .onChange(of: appState.isGenerating) { _, generating in
-                    if generating { scrollToBottom(proxy) }
+                    if generating {
+                        isRestoringScrollPosition = false
+                        scrollToBottom(proxy)
+                    }
                 }
                 .task(id: cacheKey) {
                     cachedGroupedMessages = Self.computeGroupedMessages(
                         segments: appState.conversations[appState.activeAgentId ?? ""]
                     )
-                    // Scroll to bottom after cache update (e.g., agent switch, history loaded)
-                    scrollToBottom(proxy)
+                    // After loading older history, restore scroll to the message that was
+                    // previously at the top, so the user's viewport doesn't jump.
+                    if let anchor = anchorBeforeHistoryLoad {
+                        anchorBeforeHistoryLoad = nil
+                        DispatchQueue.main.async {
+                            proxy.scrollTo(anchor, anchor: .top)
+                            isRestoringScrollPosition = false
+                        }
+                    } else if !isRestoringScrollPosition {
+                        scrollToBottom(proxy)
+                    }
                 }
             }
 
@@ -372,9 +410,18 @@ enum MessageGroupItem: Identifiable {
         case .single(let msg):
             return msg.id.uuidString
         case .toolCallGroup(let msgs):
-            return msgs.first!.id.uuidString
+            return msgs.first?.id.uuidString ?? "empty-group"
         case .sessionDivider(let sessionId, _):
             return "divider-\(sessionId)"
+        }
+    }
+
+    /// The UUID of the first message in this item (nil for dividers).
+    var firstMessageId: UUID? {
+        switch self {
+        case .single(let msg): return msg.id
+        case .toolCallGroup(let msgs): return msgs.first?.id
+        case .sessionDivider: return nil
         }
     }
 }
@@ -458,7 +505,7 @@ struct ToolCallGroupBubble: View {
                                 let formatted = ToolCallFormatter.summary(toolName: info.toolName, arguments: info.arguments)
                                 let isSelected = appState.selectedToolCallId == msg.id.uuidString
                                 HStack(spacing: 6) {
-                                    statusIcon(info.status)
+                                    ToolCallStatusIcon(status: info.status, size: 10)
                                     Image(systemName: formatted.icon)
                                         .foregroundStyle(.secondary)
                                         .font(.system(size: 10))
@@ -497,22 +544,6 @@ struct ToolCallGroupBubble: View {
         }
     }
 
-    @ViewBuilder
-    private func statusIcon(_ status: ToolCallStatus) -> some View {
-        switch status {
-        case .running:
-            ProgressView()
-                .controlSize(.mini)
-        case .completed:
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(.green)
-                .font(.system(size: 10))
-        case .failed:
-            Image(systemName: "xmark.circle.fill")
-                .foregroundStyle(.red)
-                .font(.system(size: 10))
-        }
-    }
 }
 
 // MARK: - Suggestion Pill
