@@ -206,15 +206,16 @@ struct TaskPanel: View {
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.secondary)
 
-            Chart(data.toolUsageData) { entry in
+            let entries = data.toolUsageData
+            Chart(entries) { entry in
                 BarMark(
-                    x: .value("Tool", entry.toolName),
-                    y: .value("Count", entry.count)
+                    x: .value("Count", entry.count),
+                    y: .value("Tool", entry.toolName)
                 )
                 .foregroundStyle(entry.chartColor)
                 .cornerRadius(3)
             }
-            .chartYAxis {
+            .chartXAxis {
                 AxisMarks(values: .automatic(desiredCount: 4)) {
                     AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [3]))
                         .foregroundStyle(Color.primary.opacity(0.08))
@@ -222,13 +223,14 @@ struct TaskPanel: View {
                         .font(.system(size: 9))
                 }
             }
-            .chartXAxis {
+            .chartYAxis {
                 AxisMarks { _ in
                     AxisValueLabel()
-                        .font(.system(size: 9))
+                        .font(.system(size: 10))
                 }
             }
-            .frame(height: 120)
+            // Dynamic height: 24pt per tool, minimum 80
+            .frame(height: max(80, CGFloat(Set(entries.map(\.toolName)).count) * 24))
         }
         .padding(10)
         .background(Color.primary.opacity(0.03))
