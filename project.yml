@@ -42,3 +42,15 @@ targets:
         com.apple.security.app-sandbox: false
         com.apple.security.network.client: true
         com.apple.security.files.user-selected.read-write: true
+
+  MinoTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - MinoTests
+    dependencies:
+      - target: Mino
+    settings:
+      base:
+        SWIFT_VERSION: "5.9"
+        GENERATE_INFOPLIST_FILE: YES

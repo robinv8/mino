@@ -4,12 +4,24 @@ struct StreamingBubble: View {
     let message: ChatMessage
     @State private var showCursor = true
 
+    // Pre-compiled regex for stripping mino-block tags during streaming
+    private static let minoBlockStripRegex: NSRegularExpression? = {
+        try? NSRegularExpression(
+            pattern: #"<mino-block\s+[^>]*?(?:\/>|>[\s\S]*?<\/mino-block>)"#,
+            options: []
+        )
+    }()
+
     /// Strip incomplete or complete <mino-block> tags from streaming text
     private var displayContent: String {
         var text = message.content
-        // Remove any complete <mino-block ... /> or <mino-block ...>...</mino-block> tags
-        while let range = text.range(of: #"<mino-block\s+[^>]*?(?:\/>|>[\s\S]*?<\/mino-block>)"#, options: .regularExpression) {
-            text.removeSubrange(range)
+        // Remove all complete <mino-block> tags in a single pass
+        if let regex = Self.minoBlockStripRegex {
+            text = regex.stringByReplacingMatches(
+                in: text,
+                range: NSRange(text.startIndex..., in: text),
+                withTemplate: ""
+            )
         }
         // Remove any incomplete <mino-block tag being built at the end
         if let start = text.range(of: "<mino-block", options: .backwards) {

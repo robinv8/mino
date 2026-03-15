@@ -6,11 +6,17 @@ struct MarkdownContent: View {
     let role: MessageRole
 
     var body: some View {
-        Markdown(processedContent)
+        Markdown(Self.processContent(content))
             .markdownTheme(minoTheme)
             .markdownImageProvider(LocalImageProvider())
             .textSelection(.enabled)
     }
+
+    // MARK: - Content Processing (cached)
+
+    /// LRU-style cache for processed content. Avoids repeated regex + FileManager.fileExists().
+    private static var contentCache: [String: String] = [:]
+    private static let maxCacheSize = 200
 
     private static let imagePathRegex: NSRegularExpression? = {
         try? NSRegularExpression(
@@ -19,9 +25,23 @@ struct MarkdownContent: View {
         )
     }()
 
-    /// Convert bare local image paths into markdown image syntax
-    private var processedContent: String {
-        guard let regex = Self.imagePathRegex else { return content }
+    /// Convert bare local image paths into markdown image syntax (cached).
+    private static func processContent(_ content: String) -> String {
+        if let cached = contentCache[content] { return cached }
+
+        let result = processContentUncached(content)
+        // Evict oldest entries if cache is too large
+        if contentCache.count >= maxCacheSize {
+            // Simple eviction: clear half the cache
+            let keysToRemove = Array(contentCache.keys.prefix(maxCacheSize / 2))
+            for key in keysToRemove { contentCache.removeValue(forKey: key) }
+        }
+        contentCache[content] = result
+        return result
+    }
+
+    private static func processContentUncached(_ content: String) -> String {
+        guard let regex = imagePathRegex else { return content }
 
         let nsContent = content as NSString
         let matches = regex.matches(in: content, range: NSRange(location: 0, length: nsContent.length))

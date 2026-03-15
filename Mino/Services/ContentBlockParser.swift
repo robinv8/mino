@@ -24,6 +24,22 @@ enum ContentBlockParser {
 
     // MARK: - Parse mino-block tags from text
 
+    // Pre-compiled regex for mino-block tags
+    private static let minoBlockRegex: NSRegularExpression? = {
+        try? NSRegularExpression(
+            pattern: #"<mino-block\s+([^>]*?)(?:\/>|>([\s\S]*?)<\/mino-block>)"#,
+            options: []
+        )
+    }()
+
+    // Pre-compiled regex for HTML-like attribute parsing
+    private static let attributeRegex: NSRegularExpression? = {
+        try? NSRegularExpression(
+            pattern: #"(\w+)\s*=\s*(?:"([^"]*)"|'([^']*)')"#,
+            options: []
+        )
+    }()
+
     /// Parse <mino-block /> tags from text, returning a mixed list of blocks
     /// Plain text segments → TextBlock, tags → corresponding block
     static func parseInlineBlocks(_ text: String) -> [ContentBlock]? {
@@ -33,11 +49,7 @@ enum ContentBlockParser {
         var blocks: [ContentBlock] = []
         let nsText = text as NSString
 
-        // Match <mino-block type="..." attr="..." /> or <mino-block type="..." attr="...">content</mino-block>
-        guard let regex = try? NSRegularExpression(
-            pattern: #"<mino-block\s+([^>]*?)(?:\/>|>([\s\S]*?)<\/mino-block>)"#,
-            options: []
-        ) else { return nil }
+        guard let regex = minoBlockRegex else { return nil }
 
         let matches = regex.matches(in: text, range: NSRange(location: 0, length: nsText.length))
         guard !matches.isEmpty else { return nil }
@@ -83,10 +95,7 @@ enum ContentBlockParser {
     /// Parse HTML-like attributes: key="value" key='value'
     private static func parseAttributes(_ str: String) -> [String: String] {
         var attrs: [String: String] = [:]
-        guard let regex = try? NSRegularExpression(
-            pattern: #"(\w+)\s*=\s*(?:"([^"]*)"|'([^']*)')"#,
-            options: []
-        ) else { return attrs }
+        guard let regex = attributeRegex else { return attrs }
 
         let nsStr = str as NSString
         for match in regex.matches(in: str, range: NSRange(location: 0, length: nsStr.length)) {

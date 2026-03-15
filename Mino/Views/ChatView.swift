@@ -5,6 +5,20 @@ struct ChatView: View {
     @State private var inputText: String = ""
     @FocusState private var isInputFocused: Bool
 
+    // Cached grouped messages — only recomputed when conversations or active agent change
+    @State private var cachedGroupedMessages: [MessageGroupItem] = []
+
+    /// Key that changes only when conversation structure changes (message added/removed).
+    private var cacheKey: String {
+        "\(appState.activeAgentId ?? "")-\(appState.conversationVersion)"
+    }
+
+    /// Lightweight last-message-ID for scroll tracking — avoids flatMap over all segments.
+    private var lastMessageId: UUID? {
+        guard let id = appState.activeAgentId else { return nil }
+        return appState.conversations[id]?.last?.messages.last?.id
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Header
@@ -17,26 +31,54 @@ struct ChatView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: MinoTheme.messageSpacing) {
-                        if appState.activeMessages.isEmpty {
+                        if appState.isLoadingHistory {
+                            ProgressView("Loading history...")
+                                .controlSize(.small)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 20)
+                        }
+
+                        if cachedGroupedMessages.isEmpty && !appState.isLoadingHistory {
                             emptyState
                         }
-                        ForEach(appState.activeMessages) { message in
-                            MessageBubble(message: message) { granted in
-                                appState.respondToPermission(
-                                    messageId: message.id,
-                                    agentId: appState.activeAgentId ?? "",
-                                    granted: granted
-                                )
+
+                        ForEach(cachedGroupedMessages) { item in
+                            switch item {
+                            case .sessionDivider(let sid, let date):
+                                sessionDivider(sessionId: sid, date: date)
+                            case .single(let message):
+                                // For streaming messages, read live content from conversations
+                                // to avoid stale cached copies between version bumps
+                                let liveMessage = message.isStreaming
+                                    ? (lookupMessage(id: message.id) ?? message)
+                                    : message
+                                MessageBubble(message: liveMessage) { granted in
+                                    appState.respondToPermission(
+                                        messageId: message.id,
+                                        agentId: appState.activeAgentId ?? "",
+                                        granted: granted
+                                    )
+                                }
+                                .id(message.id)
+                            case .toolCallGroup(let messages):
+                                ToolCallGroupBubble(messages: messages)
+                                    .id(messages.first!.id)
                             }
-                            .id(message.id)
                         }
                     }
                     .padding(20)
                 }
-                .onChange(of: appState.activeMessages.count) {
+                .onChange(of: lastMessageId) {
                     scrollToBottom(proxy)
                 }
-                .onChange(of: appState.isGenerating) {
+                .onChange(of: appState.isGenerating) { _, generating in
+                    if generating { scrollToBottom(proxy) }
+                }
+                .task(id: cacheKey) {
+                    cachedGroupedMessages = Self.computeGroupedMessages(
+                        segments: appState.conversations[appState.activeAgentId ?? ""]
+                    )
+                    // Scroll to bottom after cache update (e.g., agent switch, history loaded)
                     scrollToBottom(proxy)
                 }
             }
@@ -89,6 +131,10 @@ struct ChatView: View {
             case .reconnecting(let attempt):
                 ProgressView().controlSize(.mini)
                 Text("Reconnecting (\(attempt))...")
+                    .foregroundStyle(.orange)
+            case .cliActive:
+                ProgressView().controlSize(.mini)
+                Text("CLI Working...")
                     .foregroundStyle(.orange)
             }
         }
@@ -151,7 +197,7 @@ struct ChatView: View {
                     .padding(.vertical, 8)
                     .scrollContentBackground(.hidden)
                     .focused($isInputFocused)
-                    .disabled(appState.activeAgent == nil)
+                    .disabled(appState.activeAgent == nil || appState.activeAgent?.status == .cliActive)
                     .onKeyPress(.return, phases: .down) { keyPress in
                         if keyPress.modifiers.contains(.shift) {
                             return .ignored
@@ -161,7 +207,7 @@ struct ChatView: View {
                     }
 
                 if inputText.isEmpty {
-                    Text("Message...")
+                    Text(appState.activeAgent?.status == .cliActive ? "CLI is working..." : "Message...")
                         .font(.system(size: 14))
                         .foregroundStyle(.quaternary)
                         .padding(.horizontal, 14)
@@ -205,16 +251,103 @@ struct ChatView: View {
         .padding(.vertical, 12)
     }
 
+    // MARK: - Message Grouping
+
+    private static func computeGroupedMessages(segments: [ConversationSegment]?) -> [MessageGroupItem] {
+        guard let segments else { return [] }
+        var result: [MessageGroupItem] = []
+
+        for (index, segment) in segments.enumerated() {
+            if index > 0 {
+                let sessionId = segment.claudeSessionId ?? segment.id
+                result.append(.sessionDivider(sessionId, segment.startDate))
+            }
+
+            var toolCallBuffer: [ChatMessage] = []
+            for msg in segment.messages {
+                if msg.type == .toolCall {
+                    toolCallBuffer.append(msg)
+                } else {
+                    if !toolCallBuffer.isEmpty {
+                        result.append(.toolCallGroup(toolCallBuffer))
+                        toolCallBuffer = []
+                    }
+                    result.append(.single(msg))
+                }
+            }
+            if !toolCallBuffer.isEmpty {
+                result.append(.toolCallGroup(toolCallBuffer))
+            }
+        }
+        return result
+    }
+
+    private func sessionDivider(sessionId: String, date: Date) -> some View {
+        HStack(spacing: 8) {
+            dividerLine
+            VStack(spacing: 2) {
+                Text(formatSessionDate(date))
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.tertiary)
+                Text(String(sessionId.prefix(8)))
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundStyle(.quaternary)
+            }
+            .lineLimit(1)
+            .fixedSize()
+            dividerLine
+        }
+        .padding(.vertical, 12)
+    }
+
+    private var dividerLine: some View {
+        Rectangle()
+            .fill(Color.primary.opacity(0.06))
+            .frame(height: 0.5)
+    }
+
+    private func formatSessionDate(_ date: Date) -> String {
+        let calendar = Calendar.current
+        let formatter = DateFormatter()
+        if calendar.isDateInToday(date) {
+            formatter.dateFormat = "HH:mm"
+            return "Today \(formatter.string(from: date))"
+        } else if calendar.isDateInYesterday(date) {
+            formatter.dateFormat = "HH:mm"
+            return "Yesterday \(formatter.string(from: date))"
+        } else {
+            formatter.dateFormat = "yyyy-MM-dd HH:mm"
+            return formatter.string(from: date)
+        }
+    }
+
     private func scrollToBottom(_ proxy: ScrollViewProxy) {
-        if let last = appState.activeMessages.last {
+        guard let lastId = lastMessageId else { return }
+        // Defer to next run loop to avoid publishing changes during view updates
+        DispatchQueue.main.async {
             withAnimation(.easeOut(duration: 0.15)) {
-                proxy.scrollTo(last.id, anchor: .bottom)
+                proxy.scrollTo(lastId, anchor: .bottom)
             }
         }
     }
 
+    /// Look up the latest version of a message from live conversations (for streaming).
+    private func lookupMessage(id: UUID) -> ChatMessage? {
+        guard let agentId = appState.activeAgentId,
+              let segments = appState.conversations[agentId] else { return nil }
+        // Search from end since streaming message is always the last
+        for segment in segments.reversed() {
+            if let msg = segment.messages.last(where: { $0.id == id }) {
+                return msg
+            }
+        }
+        return nil
+    }
+
     private var canSend: Bool {
-        appState.activeAgent != nil && !inputText.trimmingCharacters(in: .whitespaces).isEmpty
+        guard let agent = appState.activeAgent else { return false }
+        if agent.status == .cliActive { return false }
+        return !inputText.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
     private func send() {
@@ -226,6 +359,163 @@ struct ChatView: View {
         }
     }
 }
+
+// MARK: - Message Group Item
+
+enum MessageGroupItem: Identifiable {
+    case single(ChatMessage)
+    case toolCallGroup([ChatMessage])
+    case sessionDivider(String, Date) // (sessionId, date)
+
+    var id: String {
+        switch self {
+        case .single(let msg):
+            return msg.id.uuidString
+        case .toolCallGroup(let msgs):
+            return msgs.first!.id.uuidString
+        case .sessionDivider(let sessionId, _):
+            return "divider-\(sessionId)"
+        }
+    }
+}
+
+// MARK: - Tool Call Group Bubble
+
+struct ToolCallGroupBubble: View {
+    let messages: [ChatMessage]
+    @EnvironmentObject var appState: AppState
+    @State private var isExpanded = false
+
+    private var hasRunning: Bool {
+        messages.contains { $0.toolCallInfo?.status == .running }
+    }
+
+    private var completedCount: Int {
+        messages.filter { $0.toolCallInfo?.status == .completed }.count
+    }
+
+    private var summaryText: String {
+        if hasRunning {
+            let current = messages.last { $0.toolCallInfo?.status == .running }
+            let formatted = current.flatMap { msg in
+                msg.toolCallInfo.map { ToolCallFormatter.summary(toolName: $0.toolName, arguments: $0.arguments) }
+            }
+            return formatted?.text ?? "Working..."
+        }
+        let failed = messages.filter { $0.toolCallInfo?.status == .failed }.count
+        if failed > 0 {
+            return "\(completedCount) completed, \(failed) failed"
+        }
+        return "\(messages.count) tasks completed"
+    }
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 0) {
+                // Summary header
+                HStack(spacing: 6) {
+                    if hasRunning {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                            .font(.caption)
+                    }
+                    Text(summaryText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    Spacer()
+                    Text("\(messages.count)")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.tertiary)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Color.primary.opacity(0.04))
+                        .clipShape(Capsule())
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.quaternary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        isExpanded.toggle()
+                    }
+                }
+
+                // Expanded list
+                if isExpanded {
+                    Divider()
+                        .padding(.horizontal, 10)
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(messages) { msg in
+                            if let info = msg.toolCallInfo {
+                                let formatted = ToolCallFormatter.summary(toolName: info.toolName, arguments: info.arguments)
+                                let isSelected = appState.selectedToolCallId == msg.id.uuidString
+                                HStack(spacing: 6) {
+                                    statusIcon(info.status)
+                                    Image(systemName: formatted.icon)
+                                        .foregroundStyle(.secondary)
+                                        .font(.system(size: 10))
+                                    Text(formatted.text)
+                                        .font(.system(size: 11))
+                                        .lineLimit(1)
+                                        .foregroundStyle(.secondary)
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(isSelected ? MinoTheme.accentSoft : Color.clear)
+                                .clipShape(RoundedRectangle(cornerRadius: 4))
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    appState.selectedToolCallId = msg.id.uuidString
+                                    if !appState.isTaskPanelVisible {
+                                        appState.isTaskPanelVisible = true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 6)
+                }
+            }
+            .background(MinoTheme.surfaceRaised)
+            .clipShape(RoundedRectangle(cornerRadius: MinoTheme.cornerRadiusSmall, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: MinoTheme.cornerRadiusSmall, style: .continuous)
+                    .stroke(MinoTheme.border, lineWidth: 0.5)
+            )
+
+            Spacer(minLength: 60)
+        }
+    }
+
+    @ViewBuilder
+    private func statusIcon(_ status: ToolCallStatus) -> some View {
+        switch status {
+        case .running:
+            ProgressView()
+                .controlSize(.mini)
+        case .completed:
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+                .font(.system(size: 10))
+        case .failed:
+            Image(systemName: "xmark.circle.fill")
+                .foregroundStyle(.red)
+                .font(.system(size: 10))
+        }
+    }
+}
+
+// MARK: - Suggestion Pill
 
 struct SuggestionPill: View {
     let text: String
