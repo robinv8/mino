@@ -10,8 +10,8 @@ struct ChatView: View {
     /// When loading history, store the ID of the previously-first visible message
     /// so we can restore scroll position after prepending older messages.
     @State private var anchorBeforeHistoryLoad: UUID?
-    /// Tracks the last agent ID loaded by .task — used to detect agent switches.
-    @State private var lastLoadedAgentId: String?
+    /// Agents that have been visited — first visit scrolls to bottom, subsequent visits preserve position.
+    @State private var visitedAgentIds: Set<String> = []
 
     /// Key that changes only when conversation structure changes (message added/removed).
     private var cacheKey: String {
@@ -112,12 +112,13 @@ struct ChatView: View {
                         DispatchQueue.main.async {
                             proxy.scrollTo(anchor, anchor: .top)
                         }
-                    } else if appState.activeAgentId != lastLoadedAgentId {
-                        // Initial load or agent switch: scroll to bottom.
+                    } else if let agentId = appState.activeAgentId,
+                              !visitedAgentIds.contains(agentId) {
+                        // First visit to this agent: scroll to bottom.
+                        visitedAgentIds.insert(agentId)
                         scrollToBottom(proxy)
                     }
-                    // Otherwise (watcher messages, etc.): don't scroll.
-                    lastLoadedAgentId = appState.activeAgentId
+                    // Otherwise (agent revisit, watcher messages, etc.): preserve position.
                 }
             }
 
