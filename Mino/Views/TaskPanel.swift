@@ -75,7 +75,7 @@ struct TaskPanel: View {
             let isGenerating = appState.generatingAgentIds.contains(agentId)
             if isGenerating {
                 HStack(spacing: 4) {
-                    PulsingDot(color: Color.accentColor)
+                    PulsingDot(color: Color.accentColor, size: 6)
                     Text("Generating...")
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(Color.accentColor)
@@ -501,25 +501,6 @@ private struct TimelineRow: View {
                 .fill(Color.primary.opacity(0.2))
                 .frame(width: 6, height: 6)
         }
-    }
-}
-
-// MARK: - Pulsing Dot
-
-private struct PulsingDot: View {
-    let color: Color
-    @State private var isPulsing = false
-
-    var body: some View {
-        Circle()
-            .fill(color)
-            .frame(width: 6, height: 6)
-            .opacity(isPulsing ? 1.0 : 0.3)
-            .onAppear {
-                withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
-                    isPulsing = true
-                }
-            }
     }
 }
 

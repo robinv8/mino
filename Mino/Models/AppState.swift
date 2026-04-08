@@ -107,8 +107,8 @@ class AppState {
         conversations[agentId, default: []].append(segment)
         bumpConversationVersion()
     }
-    var isGenerating: Bool = false
     var generatingAgentIds: Set<String> = []
+    var isGenerating: Bool { !generatingAgentIds.isEmpty }
     var unreadCounts: [String: Int] = [:]
     var totalUnreadCount: Int {
         unreadCounts.values.reduce(0, +)
@@ -135,7 +135,7 @@ class AppState {
     private var acpClients: [String: ACPClient] = [:]
     private var ccClients: [String: ClaudeCodeClient] = [:]
     let persistence = PersistenceService()
-    private var streamTask: Task<Void, Never>?
+    private var streamTasks: [String: Task<Void, Never>] = [:]
     private var connectionTasks: [String: Task<Void, Never>] = [:]
     private var pendingMessage: String?
     private var contentSpecInjected: Set<String> = []
@@ -151,11 +151,53 @@ class AppState {
     var isLoadingMoreHistory: Bool = false
     // Throttle streaming text updates to avoid overwhelming SwiftUI
     private var pendingTextBuffer: [UUID: String] = [:]
-    private var flushTask: Task<Void, Never>?
+    private var flushTasks: [String: Task<Void, Never>] = [:]
     private let flushInterval: UInt64 = 30_000_000 // 30ms
+
+    /// View mode: chat (default single-agent) or command grid.
+    enum ViewMode: String { case chat, command }
+    var viewMode: ViewMode = .chat
 
     var activeAgent: Agent? {
         agents.first { $0.id == activeAgentId }
+    }
+
+    /// Derive activity status for an agent from existing data.
+    func activityStatus(for agentId: String) -> AgentActivityStatus {
+        if generatingAgentIds.contains(agentId) {
+            let running = taskData[agentId]?.runningCount ?? 0
+            if running > 0 {
+                return .coding(filesChanged: filesChanged(for: agentId))
+            }
+            return .thinking
+        }
+        // Check if the latest message is an error
+        if let segments = conversations[agentId],
+           let lastMsg = segments.last?.messages.last,
+           lastMsg.type == .error {
+            return .error(String(lastMsg.content.prefix(60)))
+        }
+        return .idle
+    }
+
+    /// Count distinct file paths from tool calls for an agent.
+    func filesChanged(for agentId: String) -> Int {
+        guard let segments = conversations[agentId] else { return 0 }
+        var files = Set<String>()
+        for segment in segments {
+            for msg in segment.messages where msg.type == .toolCall {
+                guard let info = msg.toolCallInfo else { continue }
+                let writableTools: Set<String> = ["Edit", "Write", "NotebookEdit"]
+                guard writableTools.contains(info.toolName) else { continue }
+                // Extract file_path from JSON arguments
+                if let data = info.arguments.data(using: .utf8),
+                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let path = json["file_path"] as? String {
+                    files.insert(path)
+                }
+            }
+        }
+        return files.count
     }
 
 
@@ -466,12 +508,15 @@ class AppState {
 
     // MARK: - Messaging
 
-    /// Send a message. When `resumeSessionId` is provided, it resumes that specific Claude Code session.
+    /// Send a message to the active agent. Delegates to `sendMessageToAgent`.
     func sendMessage(_ content: String, resumeSessionId: String? = nil) async {
-        guard let agentId = activeAgentId,
-              let agent = agents.first(where: { $0.id == agentId }) else {
-            return
-        }
+        guard let agentId = activeAgentId else { return }
+        await sendMessageToAgent(content, agentId: agentId, resumeSessionId: resumeSessionId)
+    }
+
+    /// Send a message to a specific agent by ID. Supports parallel multi-agent dispatch.
+    func sendMessageToAgent(_ content: String, agentId: String, resumeSessionId: String? = nil) async {
+        guard let agent = agents.first(where: { $0.id == agentId }) else { return }
 
         let userMessage = ChatMessage(role: .user, content: content, type: .text)
         appendMessage(userMessage, to: agentId)
@@ -490,7 +535,6 @@ class AppState {
             id: streamingId, role: .agent, content: "", type: .streaming, isStreaming: true
         )
         appendMessage(placeholder, to: agentId)
-        isGenerating = true
         generatingAgentIds.insert(agentId)
         updateDockBadge()
 
@@ -502,7 +546,6 @@ class AppState {
                 msg.type = .error
                 msg.isStreaming = false
             }
-            isGenerating = false
             generatingAgentIds.remove(agentId)
             return
         }
@@ -510,7 +553,7 @@ class AppState {
         guard let client = acpClients[agentId] else { return }
 
         // Start stream consumer BEFORE sending message
-        streamTask = Task {
+        streamTasks[agentId] = Task {
             for await update in await client.streamUpdates() {
                 guard !Task.isCancelled else { break }
                 handleUpdate(update, streamingId: streamingId, agentId: agentId)
@@ -529,7 +572,6 @@ class AppState {
                 msg.type = .error
                 msg.isStreaming = false
             }
-            isGenerating = false
             generatingAgentIds.remove(agentId)
         }
     }
@@ -563,7 +605,6 @@ class AppState {
             id: streamingId, role: .agent, content: "", type: .streaming, isStreaming: true
         )
         appendMessage(placeholder, to: agentId)
-        isGenerating = true
         generatingAgentIds.insert(agentId)
         updateDockBadge()
 
@@ -581,7 +622,7 @@ class AppState {
                 agents[idx].status = .connected
             }
 
-            streamTask = Task {
+            streamTasks[agentId] = Task {
                 for await update in updateStream {
                     guard !Task.isCancelled else { break }
                     handleUpdate(update, streamingId: streamingId, agentId: agentId)
@@ -596,7 +637,6 @@ class AppState {
                 msg.type = .error
                 msg.isStreaming = false
             }
-            isGenerating = false
             generatingAgentIds.remove(agentId)
             lastError = .processStartFailed(error.localizedDescription)
             if let idx = agents.firstIndex(where: { $0.id == agentId }) {
@@ -605,11 +645,18 @@ class AppState {
         }
     }
 
+    /// Cancel generation for the active agent.
     func cancelGeneration() {
         guard let agentId = activeAgentId else { return }
-        streamTask?.cancel()
-        streamTask = nil
-        isGenerating = false
+        cancelGeneration(agentId: agentId)
+    }
+
+    /// Cancel generation for a specific agent.
+    func cancelGeneration(agentId: String) {
+        streamTasks[agentId]?.cancel()
+        streamTasks.removeValue(forKey: agentId)
+        flushTasks[agentId]?.cancel()
+        flushTasks.removeValue(forKey: agentId)
         generatingAgentIds.remove(agentId)
 
         if let client = acpClients[agentId] {
@@ -747,7 +794,6 @@ class AppState {
                 msg.type = .text
                 msg.isStreaming = false
             }
-            isGenerating = false
             generatingAgentIds.remove(agentId)
             saveConversations(agentId: agentId)
             notifyAgentFinished(agentId: agentId, messageId: streamingId)
@@ -806,7 +852,6 @@ class AppState {
                 msg.type = .error
                 msg.isStreaming = false
             }
-            isGenerating = false
             generatingAgentIds.remove(agentId)
 
         case .sessionResult(let durationMs, let costUsd):
@@ -850,7 +895,6 @@ class AppState {
                     resources[agentId, default: []].append(contentsOf: extracted)
                 }
             }
-            isGenerating = false
             generatingAgentIds.remove(agentId)
             saveConversations(agentId: agentId)
 
@@ -869,16 +913,16 @@ class AppState {
     // MARK: - Private: Text Delta Throttling
 
     private func scheduleFlush(streamingId: UUID, agentId: String) {
-        guard flushTask == nil else { return }
-        flushTask = Task {
+        guard flushTasks[agentId] == nil else { return }
+        flushTasks[agentId] = Task {
             try? await Task.sleep(nanoseconds: flushInterval)
             flushPendingText(streamingId: streamingId, agentId: agentId)
         }
     }
 
     private func flushPendingText(streamingId: UUID, agentId: String) {
-        flushTask?.cancel()
-        flushTask = nil
+        flushTasks[agentId]?.cancel()
+        flushTasks.removeValue(forKey: agentId)
         guard let buffered = pendingTextBuffer.removeValue(forKey: streamingId), !buffered.isEmpty else { return }
         // Silent: streaming text deltas should NOT bump conversationVersion
         updateMessage(id: streamingId, agentId: agentId, silent: true) { msg in

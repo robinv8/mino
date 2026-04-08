@@ -12,18 +12,28 @@ struct ContentView: View {
             if appState.agents.isEmpty {
                 WelcomeView(showingAddAgent: $showingAddAgent)
             } else {
-                HStack(spacing: 0) {
-                    ChatView()
-                        .frame(maxWidth: .infinity)
+                Group {
+                    switch appState.viewMode {
+                    case .chat:
+                        HStack(spacing: 0) {
+                            ChatView()
+                                .frame(maxWidth: .infinity)
 
-                    if appState.isTaskPanelVisible {
-                        Divider()
+                            if appState.isTaskPanelVisible {
+                                Divider()
+                            }
+                            TaskPanel()
+                                .frame(width: appState.isTaskPanelVisible ? 320 : 0)
+                                .clipped()
+                        }
+                    case .command:
+                        CommandView()
                     }
-                    TaskPanel()
-                        .frame(width: appState.isTaskPanelVisible ? 320 : 0)
-                        .clipped()
                 }
                 .toolbar {
+                    ToolbarItem(placement: .navigation) {
+                        viewModePicker
+                    }
                     ToolbarItem(placement: .primaryAction) {
                         Button {
                             withAnimation(.easeInOut(duration: 0.2)) {
@@ -62,6 +72,18 @@ struct ContentView: View {
                 }
             }
         }
+    }
+
+    private var viewModePicker: some View {
+        @Bindable var state = appState
+        return Picker("View", selection: $state.viewMode) {
+            Image(systemName: "bubble.left.and.bubble.right")
+                .tag(AppState.ViewMode.chat)
+            Image(systemName: "square.grid.2x2")
+                .tag(AppState.ViewMode.command)
+        }
+        .pickerStyle(.segmented)
+        .fixedSize()
     }
 }
 
