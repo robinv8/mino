@@ -10,6 +10,9 @@ env:
   APP_NAME: Mino
   SCHEME: Mino
 
+permissions:
+  contents: write
+
 jobs:
   build-and-release:
     runs-on: macos-15
@@ -49,6 +52,12 @@ jobs:
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
+          # Import Apple intermediate certificates for proper chain
+          curl -sL https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer -o $RUNNER_TEMP/DeveloperIDG2CA.cer
+          curl -sL https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer -o $RUNNER_TEMP/AppleWWDRCAG3.cer
+          security import $RUNNER_TEMP/DeveloperIDG2CA.cer -k "$KEYCHAIN_PATH" -T /usr/bin/codesign
+          security import $RUNNER_TEMP/AppleWWDRCAG3.cer -k "$KEYCHAIN_PATH" -T /usr/bin/codesign
+
           echo "$CERTIFICATE_P12" | base64 --decode > $RUNNER_TEMP/certificate.p12
           security import $RUNNER_TEMP/certificate.p12 \
             -k "$KEYCHAIN_PATH" \
@@ -69,7 +78,9 @@ jobs:
             DEVELOPMENT_TEAM="${{ secrets.APPLE_TEAM_ID }}" \
             MARKETING_VERSION="${{ steps.version.outputs.VERSION }}" \
             CURRENT_PROJECT_VERSION="${GITHUB_RUN_NUMBER}" \
-            CODE_SIGN_STYLE=Manual
+            CODE_SIGN_STYLE=Manual \
+            ENABLE_HARDENED_RUNTIME=YES \
+            OTHER_CODE_SIGN_FLAGS="--options=runtime"
 
       - name: Export archive
         run: |
@@ -125,11 +136,25 @@ jobs:
 
           DMG_PATH="$RUNNER_TEMP/$APP_NAME-${{ steps.version.outputs.VERSION }}.dmg"
 
-          xcrun notarytool submit "$DMG_PATH" \
+          SUBMIT_OUT=$(xcrun notarytool submit "$DMG_PATH" \
             --key ~/.appstoreconnect/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8 \
             --key-id "$APPLE_API_KEY_ID" \
             --issuer "$APPLE_API_ISSUER_ID" \
-            --wait
+            --wait 2>&1) || true
+          echo "$SUBMIT_OUT"
+
+          SUBMISSION_ID=$(echo "$SUBMIT_OUT" | grep "id:" | head -1 | awk '{print $2}')
+
+          if echo "$SUBMIT_OUT" | grep -q "status: Invalid"; then
+            echo "::error::Notarization failed. Fetching log..."
+            xcrun notarytool log "$SUBMISSION_ID" \
+              --key ~/.appstoreconnect/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8 \
+              --key-id "$APPLE_API_KEY_ID" \
+              --issuer "$APPLE_API_ISSUER_ID" \
+              developer_log.json
+            cat developer_log.json
+            exit 1
+          fi
 
           xcrun stapler staple "$DMG_PATH"
 
@@ -212,14 +237,24 @@ jobs:
           WORK_DIR=$(mktemp -d)
           git show gh-pages:appcast.xml > "$WORK_DIR/old-appcast.xml" 2>/dev/null || true
 
-          if [ -s "$WORK_DIR/old-appcast.xml" ]; then
-            # Merge: insert new <item> before closing </channel>
-            NEW_ITEM=$(sed -n '/<item>/,/<\/item>/p' $RUNNER_TEMP/appcast.xml)
-            sed -i '' "s|</channel>|${NEW_ITEM}\n    </channel>|" "$WORK_DIR/old-appcast.xml"
-            cp "$WORK_DIR/old-appcast.xml" "$WORK_DIR/appcast.xml"
-          else
-            cp $RUNNER_TEMP/appcast.xml "$WORK_DIR/appcast.xml"
-          fi
+          python3 - "$WORK_DIR/old-appcast.xml" "$RUNNER_TEMP/appcast.xml" "$WORK_DIR/appcast.xml" <<'PYEOF'
+          import sys, re
+          old_path, new_path, out_path = sys.argv[1], sys.argv[2], sys.argv[3]
+          try:
+              with open(old_path) as f:
+                  old = f.read()
+              if not old.strip():
+                  raise FileNotFoundError
+              with open(new_path) as f:
+                  new = f.read()
+              new_item = re.search(r'(<item>.*?</item>)', new, re.DOTALL).group(1)
+              merged = old.replace('</channel>', new_item + '\n    </channel>')
+              with open(out_path, 'w') as f:
+                  f.write(merged)
+          except (FileNotFoundError, OSError):
+              import shutil
+              shutil.copy2(new_path, out_path)
+          PYEOF
 
           cd "$WORK_DIR"
           git init

@@ -57,7 +57,7 @@ targets:
         CFBundleDisplayName: Mino
         LSApplicationCategoryType: public.app-category.productivity
         SUFeedURL: "https://robinv8.github.io/mino/appcast.xml"
-        SUPublicEDKey: ""
+        SUPublicEDKey: "yuN4cdOXH2Gw83lNpH8H8CmhNqYNL3cgLazP7j3oyiU="
     entitlements:
       path: Mino/Mino.entitlements
       properties:
