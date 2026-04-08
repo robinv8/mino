@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0160E60F1EDE67FC5C69CF97 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 3FBC8A31B60154B2055941C9 /* Sparkle */; };
 		021D035952BA280AADDB309D /* AddAgentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 464FA61C5C1DCCB983331E01 /* AddAgentView.swift */; };
 		0E2B68264655DC8305138809 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4AC049C7B8B63C888E2439F4 /* Assets.xcassets */; };
 		0EA426B36047CF01805BE526 /* ConversationSegment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00520F3FDE5D7207C72C17FF /* ConversationSegment.swift */; };
@@ -19,6 +20,7 @@
 		2C3C5CE8D3770EA30F27BCEF /* CommandView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 501768CAA31DC685C29DD50B /* CommandView.swift */; };
 		2E3B1B5CF241AFB1DB87E86F /* ACPClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F31175CD56FBCFD276426FE /* ACPClient.swift */; };
 		2F6754DC39BABA1F84B38671 /* ToolCallFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39D55D6746A54A029EA0493F /* ToolCallFormatter.swift */; };
+		33334B884FC4CF2DF32902C3 /* UpdaterService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7291A3AC4846DEDE7B3088E /* UpdaterService.swift */; };
 		3B3FA4B61CA862BCECB1B70F /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = FC6FF2602FCC4CC6C856E34D /* MarkdownUI */; };
 		3BA0BA1656E70FF118F5295F /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E23CD38FC767DA292B2D6AFF /* ChatView.swift */; };
 		449AD2CD1C01A910CE00DE9D /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F676644CC579F8B2E68AF94 /* SidebarView.swift */; };
@@ -120,6 +122,8 @@
 		BC7A0EE7C76E1A745F0D0125 /* MinoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MinoApp.swift; sourceTree = "<group>"; };
 		C6FD4A22282F9415B5D6F5A9 /* ClaudeConfigReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeConfigReader.swift; sourceTree = "<group>"; };
 		C720910A8F089FB24665942A /* ContentBlockParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentBlockParser.swift; sourceTree = "<group>"; };
+		C7291A3AC4846DEDE7B3088E /* UpdaterService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdaterService.swift; sourceTree = "<group>"; };
+		CD8B8DA104B182CB6B5445E6 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		D3CDAA9FE934699C5FE58E75 /* CorrectnessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorrectnessTests.swift; sourceTree = "<group>"; };
 		DA86C435C2971CC17E600373 /* ClaudeCodeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeCodeClient.swift; sourceTree = "<group>"; };
 		E0D39958DFD8338586089CDD /* LocalImageProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalImageProvider.swift; sourceTree = "<group>"; };
@@ -138,6 +142,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				3B3FA4B61CA862BCECB1B70F /* MarkdownUI in Frameworks */,
+				0160E60F1EDE67FC5C69CF97 /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -197,6 +202,7 @@
 			isa = PBXGroup;
 			children = (
 				4AC049C7B8B63C888E2439F4 /* Assets.xcassets */,
+				CD8B8DA104B182CB6B5445E6 /* Info.plist */,
 				104A0BF552DB381015C60254 /* Mino.entitlements */,
 				BC7A0EE7C76E1A745F0D0125 /* MinoApp.swift */,
 				B749EAB5FF6497E090F2EBE9 /* Components */,
@@ -269,6 +275,7 @@
 				85BD32F2C477ABD4425A7394 /* PersistenceService.swift */,
 				E1044088AEC977094DD3BEAE /* ResourceExtractor.swift */,
 				39D55D6746A54A029EA0493F /* ToolCallFormatter.swift */,
+				C7291A3AC4846DEDE7B3088E /* UpdaterService.swift */,
 				D8A89E78EFACFB086F48FB3C /* ACP */,
 				86B83816B9CCED8179921236 /* ClaudeCode */,
 			);
@@ -304,6 +311,7 @@
 			name = Mino;
 			packageProductDependencies = (
 				FC6FF2602FCC4CC6C856E34D /* MarkdownUI */,
+				3FBC8A31B60154B2055941C9 /* Sparkle */,
 			);
 			productName = Mino;
 			productReference = 27F781FB423D7D7E9E6630F1 /* Mino.app */;
@@ -349,6 +357,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				E0D583FCB9F54C64E7C2E910 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
+				4E11B2E36F8745781F0D3EF1 /* XCRemoteSwiftPackageReference "Sparkle" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 04779582DC84B641F37F186B /* Products */;
@@ -426,6 +435,7 @@
 				2F6754DC39BABA1F84B38671 /* ToolCallFormatter.swift in Sources */,
 				ABFEA85C8FEE7AE812911FED /* ToolCallInfo.swift in Sources */,
 				4B0577594054C7AFC4985E95 /* ToolCallStatusIcon.swift in Sources */,
+				33334B884FC4CF2DF32902C3 /* UpdaterService.swift in Sources */,
 				203319223F074A7A9A8EAB59 /* VideoPlayerView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -475,7 +485,7 @@
 				CODE_SIGN_ENTITLEMENTS = Mino/Mino.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Mino/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Mino;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -499,7 +509,7 @@
 				CODE_SIGN_ENTITLEMENTS = Mino/Mino.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Mino/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Mino;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -686,6 +696,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		4E11B2E36F8745781F0D3EF1 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.6.0;
+			};
+		};
 		E0D583FCB9F54C64E7C2E910 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/gonzalezreal/swift-markdown-ui";
@@ -697,6 +715,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		3FBC8A31B60154B2055941C9 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4E11B2E36F8745781F0D3EF1 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
 		FC6FF2602FCC4CC6C856E34D /* MarkdownUI */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = E0D583FCB9F54C64E7C2E910 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */;

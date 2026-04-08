@@ -1,9 +1,12 @@
 import SwiftUI
+import Sparkle
 
 struct SettingsView: View {
+    @ObservedObject var updaterViewModel: CheckForUpdatesViewModel
+
     var body: some View {
         TabView {
-            GeneralSettingsTab()
+            GeneralSettingsTab(updaterViewModel: updaterViewModel)
                 .tabItem {
                     Label("General", systemImage: "gear")
                 }
@@ -32,6 +35,7 @@ struct SettingsView: View {
 // MARK: - General Settings
 
 private struct GeneralSettingsTab: View {
+    @ObservedObject var updaterViewModel: CheckForUpdatesViewModel
     @AppStorage("notificationsEnabled") private var notificationsEnabled = true
     @AppStorage("launchAtLogin") private var launchAtLogin = false
 
@@ -54,6 +58,18 @@ private struct GeneralSettingsTab: View {
                     Text(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1")
                         .foregroundStyle(.secondary)
                 }
+            }
+
+            Section("Updates") {
+                Toggle("Automatically check for updates", isOn: Binding(
+                    get: { updaterViewModel.updater.automaticallyChecksForUpdates },
+                    set: { updaterViewModel.updater.automaticallyChecksForUpdates = $0 }
+                ))
+
+                Button("Check for Updates...") {
+                    updaterViewModel.checkForUpdates()
+                }
+                .disabled(!updaterViewModel.canCheckForUpdates)
             }
         }
         .formStyle(.grouped)

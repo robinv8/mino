@@ -1,5 +1,6 @@
 import SwiftUI
 import UserNotifications
+import Sparkle
 
 /// Delegate that ensures notifications are displayed even when the app is in the foreground.
 /// macOS silently drops notifications for active apps unless this delegate is set.
@@ -16,6 +17,7 @@ class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
 @main
 struct MinoApp: App {
     @State private var appState = AppState()
+    @StateObject private var updaterViewModel = CheckForUpdatesViewModel()
     private let notificationDelegate = NotificationDelegate()
 
     init() {
@@ -39,19 +41,25 @@ struct MinoApp: App {
         }
         .windowStyle(.titleBar)
         .defaultSize(width: 1200, height: 800)
-        #if DEBUG
         .commands {
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates...") {
+                    updaterViewModel.checkForUpdates()
+                }
+                .disabled(!updaterViewModel.canCheckForUpdates)
+            }
+            #if DEBUG
             CommandMenu("Debug") {
                 Button("Load Preview Bot") {
                     appState.loadMockAgent()
                 }
                 .keyboardShortcut("P", modifiers: [.command, .shift])
             }
+            #endif
         }
-        #endif
 
         Settings {
-            SettingsView()
+            SettingsView(updaterViewModel: updaterViewModel)
         }
 
         MenuBarExtra {

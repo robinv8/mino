@@ -10,6 +10,9 @@ packages:
   MarkdownUI:
     url: https://github.com/gonzalezreal/swift-markdown-ui
     from: "2.4.0"
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: "2.6.0"
 
 schemes:
   Mino:
@@ -31,6 +34,7 @@ targets:
       - Mino
     dependencies:
       - package: MarkdownUI
+      - package: Sparkle
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mino.app
@@ -41,13 +45,19 @@ targets:
         MACOSX_DEPLOYMENT_TARGET: "14.0"
         INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.productivity"
         INFOPLIST_KEY_CFBundleDisplayName: Mino
-        GENERATE_INFOPLIST_FILE: YES
         COMBINE_HIDPI_IMAGES: YES
       configs:
         debug:
           SWIFT_OPTIMIZATION_LEVEL: "-Onone"
         release:
           SWIFT_OPTIMIZATION_LEVEL: "-O"
+    info:
+      path: Mino/Info.plist
+      properties:
+        CFBundleDisplayName: Mino
+        LSApplicationCategoryType: public.app-category.productivity
+        SUFeedURL: "https://robinv8.github.io/mino/appcast.xml"
+        SUPublicEDKey: ""
     entitlements:
       path: Mino/Mino.entitlements
       properties:
