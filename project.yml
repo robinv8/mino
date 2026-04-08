@@ -11,6 +11,18 @@ packages:
     url: https://github.com/gonzalezreal/swift-markdown-ui
     from: "2.4.0"
 
+schemes:
+  Mino:
+    build:
+      targets:
+        Mino: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - MinoTests
+
 targets:
   Mino:
     type: application

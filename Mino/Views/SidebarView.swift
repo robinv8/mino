@@ -1,24 +1,20 @@
 import SwiftUI
 
 struct SidebarView: View {
-    @EnvironmentObject var appState: AppState
+    @Environment(AppState.self) var appState
     @State private var showAddAgent = false
     @State private var editingAgent: Agent?
+    @State private var isAddHovered = false
 
     var body: some View {
+        @Bindable var bindableState = appState
         VStack(alignment: .leading, spacing: 0) {
-            Text("Mino")
-                .font(.system(size: 15, weight: .bold, design: .rounded))
-                .foregroundStyle(.primary.opacity(0.8))
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
-
-            List(appState.agents, selection: $appState.activeAgentId) { agent in
+            List(appState.agents, selection: $bindableState.activeAgentId) { agent in
                 AgentRow(
                     agent: agent,
                     lastMessage: lastMessage(for: agent.id),
                     unreadCount: appState.unreadCounts[agent.id] ?? 0,
-                    isWorking: appState.generatingAgentIds.contains(agent.id) || agent.status == .cliActive
+                    isWorking: appState.generatingAgentIds.contains(agent.id)
                 )
                 .tag(agent.id)
                 .contextMenu {
@@ -45,20 +41,22 @@ struct SidebarView: View {
             } label: {
                 Label("Add Agent", systemImage: "plus")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(isAddHovered ? .primary : .tertiary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
             }
             .buttonStyle(.plain)
+            .onHover { isAddHovered = $0 }
         }
+        .background(.ultraThinMaterial)
         .sheet(isPresented: $showAddAgent) {
             AddAgentView()
-                .environmentObject(appState)
+                .environment(appState)
         }
         .sheet(item: $editingAgent) { agent in
             AddAgentView(editingAgent: agent)
-                .environmentObject(appState)
+                .environment(appState)
         }
     }
 
@@ -81,23 +79,23 @@ struct AgentRow: View {
         HStack(spacing: 10) {
             ZStack(alignment: .bottomTrailing) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .fill(agent.type == .claudeCode
-                              ? LinearGradient(colors: [Color.orange, Color.red.opacity(0.8)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                              : MinoTheme.avatarGradient(for: agent.name))
-                        .frame(width: 36, height: 36)
+                              ? Color.secondary.opacity(0.3)
+                              : MinoTheme.avatarColor(for: agent.name).opacity(0.3))
+                        .frame(width: 32, height: 32)
                     if agent.type == .claudeCode {
                         Image(systemName: "terminal")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(.white)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.secondary)
                     } else {
                         Text(String(agent.name.prefix(1)))
-                            .font(.system(size: 14, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.primary)
                     }
                 }
 
-                // Working / done indicator
+                // Working indicator
                 if isWorking {
                     ProgressView()
                         .controlSize(.mini)
@@ -108,15 +106,15 @@ struct AgentRow: View {
                         )
                         .offset(x: 3, y: 3)
                 } else if lastMessage != nil {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.green)
+                    Circle()
+                        .fill(.green)
+                        .frame(width: 6, height: 6)
                         .background(
                             Circle()
                                 .fill(Color(.windowBackgroundColor))
                                 .frame(width: 10, height: 10)
                         )
-                        .offset(x: 3, y: 3)
+                        .offset(x: 2, y: 2)
                 }
             }
 
@@ -132,7 +130,7 @@ struct AgentRow: View {
                             .foregroundStyle(.white)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
-                            .background(MinoTheme.accent)
+                            .background(Color.primary)
                             .clipShape(Capsule())
                     }
                 }
@@ -159,7 +157,7 @@ struct AgentRow: View {
                 }
             }
         }
-        .padding(.vertical, 3)
+        .padding(.vertical, 2)
     }
 
     private var statusColor: Color {
@@ -168,7 +166,6 @@ struct AgentRow: View {
         case .disconnected: .gray
         case .connecting: .orange
         case .reconnecting: .orange
-        case .cliActive: .orange
         }
     }
 
@@ -178,7 +175,6 @@ struct AgentRow: View {
         case .disconnected: "Disconnected"
         case .connecting: "Connecting..."
         case .reconnecting(let attempt): "Reconnecting (\(attempt))..."
-        case .cliActive: "CLI Working..."
         }
     }
 }

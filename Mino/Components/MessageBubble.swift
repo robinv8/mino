@@ -54,20 +54,13 @@ struct MessageBubble: View {
                 MarkdownContent(content: message.content, role: .user)
                     .padding(.horizontal, MinoTheme.bubblePaddingH)
                     .padding(.vertical, MinoTheme.bubblePaddingV)
-                    .background(MinoTheme.userBubbleGradient)
+                    .background(MinoTheme.userBubble)
                     .clipShape(RoundedRectangle(cornerRadius: MinoTheme.cornerRadius, style: .continuous))
-                    .shadow(color: Color(hex: 0x6B4CE6).opacity(0.18), radius: 8, y: 2)
+                    .shadow(color: .black.opacity(0.03), radius: 2, y: 1)
             } else {
                 MarkdownContent(content: message.content, role: .agent)
                     .padding(.horizontal, MinoTheme.bubblePaddingH)
                     .padding(.vertical, MinoTheme.bubblePaddingV)
-                    .background(MinoTheme.agentBubble)
-                    .clipShape(RoundedRectangle(cornerRadius: MinoTheme.cornerRadius, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: MinoTheme.cornerRadius, style: .continuous)
-                            .stroke(MinoTheme.border, lineWidth: 0.5)
-                    )
-                    .shadow(color: .black.opacity(0.04), radius: MinoTheme.bubbleShadowRadius, y: 2)
             }
         }
     }
@@ -76,13 +69,6 @@ struct MessageBubble: View {
         ContentBlocksView(blocks: blocks)
             .padding(.horizontal, MinoTheme.bubblePaddingH)
             .padding(.vertical, MinoTheme.bubblePaddingV)
-            .background(MinoTheme.agentBubble)
-            .clipShape(RoundedRectangle(cornerRadius: MinoTheme.cornerRadius, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: MinoTheme.cornerRadius, style: .continuous)
-                    .stroke(MinoTheme.border, lineWidth: 0.5)
-            )
-            .shadow(color: .black.opacity(0.04), radius: MinoTheme.bubbleShadowRadius, y: 2)
     }
 
     private var errorContent: some View {

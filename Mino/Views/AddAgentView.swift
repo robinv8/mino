@@ -1,11 +1,11 @@
 import SwiftUI
 
 struct AddAgentView: View {
-    @EnvironmentObject var appState: AppState
+    @Environment(AppState.self) var appState
     @Environment(\.dismiss) private var dismiss
     @State private var name: String = ""
     @State private var url: String = "ws://localhost:3000"
-    @State private var agentType: AgentType = .acp
+    @State private var agentType: AgentType = .claudeCode
     @State private var workingDirectory: String = ""
 
     var editingAgent: Agent?
@@ -15,13 +15,14 @@ struct AddAgentView: View {
             Text(editingAgent != nil ? "Edit Agent" : "Add Agent")
                 .font(.headline)
 
-            if editingAgent == nil {
-                Picker("Type", selection: $agentType) {
-                    Text("ACP (WebSocket)").tag(AgentType.acp)
-                    Text("Claude Code").tag(AgentType.claudeCode)
-                }
-                .pickerStyle(.segmented)
-            }
+            // ACP type picker hidden for now — only Claude Code supported
+            // if editingAgent == nil {
+            //     Picker("Type", selection: $agentType) {
+            //         Text("ACP (WebSocket)").tag(AgentType.acp)
+            //         Text("Claude Code").tag(AgentType.claudeCode)
+            //     }
+            //     .pickerStyle(.segmented)
+            // }
 
             VStack(alignment: .leading, spacing: 8) {
                 Text("Name")

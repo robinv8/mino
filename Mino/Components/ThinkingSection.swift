@@ -21,9 +21,9 @@ struct ThinkingSection: View {
                 .textSelection(.enabled)
         } label: {
             HStack(spacing: 5) {
-                Image(systemName: "sparkles")
+                Image(systemName: "ellipsis.bubble")
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(MinoTheme.accent.opacity(0.6))
+                    .foregroundStyle(.tertiary)
                 Text(isStreaming ? "Thinking..." : "Thought process")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.tertiary)
@@ -33,9 +33,9 @@ struct ThinkingSection: View {
                 }
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(MinoTheme.accentSoft.opacity(0.5))
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(Color.primary.opacity(0.03))
         .clipShape(RoundedRectangle(cornerRadius: MinoTheme.cornerRadiusSmall, style: .continuous))
         .onChange(of: isStreaming) { _, newValue in
             if newValue {

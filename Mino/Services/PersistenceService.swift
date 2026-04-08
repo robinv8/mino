@@ -8,17 +8,22 @@ actor PersistenceService {
     private let decoder = JSONDecoder()
     private var saveTask: Task<Void, Never>?
 
-    init() {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        baseURL = appSupport.appendingPathComponent("Mino", isDirectory: true)
-        conversationsURL = baseURL.appendingPathComponent("conversations", isDirectory: true)
-        agentsURL = baseURL.appendingPathComponent("agents.json")
+    init(baseURL: URL? = nil) {
+        let base: URL
+        if let baseURL {
+            base = baseURL
+        } else {
+            let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            base = appSupport.appendingPathComponent("Mino", isDirectory: true)
+        }
+        self.baseURL = base
+        conversationsURL = base.appendingPathComponent("conversations", isDirectory: true)
+        agentsURL = base.appendingPathComponent("agents.json")
         encoder.outputFormatting = .prettyPrinted
         encoder.dateEncodingStrategy = .iso8601
         decoder.dateDecodingStrategy = .iso8601
-        // Ensure directories exist synchronously in init
         let fm = FileManager.default
-        try? fm.createDirectory(at: baseURL, withIntermediateDirectories: true)
+        try? fm.createDirectory(at: base, withIntermediateDirectories: true)
         try? fm.createDirectory(at: conversationsURL, withIntermediateDirectories: true)
     }
 

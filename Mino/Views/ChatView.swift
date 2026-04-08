@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ChatView: View {
-    @EnvironmentObject var appState: AppState
+    @Environment(AppState.self) var appState
     @State private var inputText: String = ""
     @FocusState private var isInputFocused: Bool
 
@@ -16,16 +16,66 @@ struct ChatView: View {
     @State private var scrollPositionId: String?
     /// Saved scroll positions per agent — restored when switching back.
     @State private var savedScrollPositions: [String: String] = [:]
+    /// Whether the scroll view is near the bottom — used to suppress auto-scroll when user scrolls up.
+    @State private var isNearBottom: Bool = true
+    /// ID of the selected session. Empty string = latest (current) session.
+    @State private var selectedSessionId: String = ""
+    /// Search
+    @State private var isSearching = false
+    @State private var searchText = ""
+    @State private var searchResults: [(segmentId: String, messageId: UUID, preview: String)] = []
+    @State private var searchResultIndex = 0
+
+    /// Effective session ID — resolves empty to the latest segment's ID.
+    private var effectiveSessionId: String {
+        if !selectedSessionId.isEmpty { return selectedSessionId }
+        guard let agentId = appState.activeAgentId,
+              let segments = appState.conversations[agentId],
+              let last = segments.last else { return "" }
+        return last.id
+    }
+
+    /// The segment currently being viewed.
+    private var activeSegment: ConversationSegment? {
+        guard let agentId = appState.activeAgentId,
+              let segments = appState.conversations[agentId],
+              !segments.isEmpty else { return nil }
+        let target = effectiveSessionId
+        if !target.isEmpty,
+           let match = segments.first(where: { $0.id == target }) {
+            return match
+        }
+        return segments.last
+    }
+
+    /// Whether we're viewing a historical (non-current) session.
+    private var isViewingHistory: Bool {
+        guard let agentId = appState.activeAgentId,
+              let segments = appState.conversations[agentId],
+              !segments.isEmpty else { return false }
+        let target = effectiveSessionId
+        if target.isEmpty { return false }
+        return segments.last?.id != target
+    }
+
+    /// Whether the session picker should be shown.
+    private var hasMultipleSessions: Bool {
+        guard let agentId = appState.activeAgentId else { return false }
+        let segmentCount = appState.conversations[agentId]?.count ?? 0
+        let pendingCount = appState.pendingClaudeSessions[agentId]?.count ?? 0
+        return segmentCount + pendingCount > 1
+    }
 
     /// Key that changes only when conversation structure changes (message added/removed).
     private var cacheKey: String {
-        "\(appState.activeAgentId ?? "")-\(appState.conversationVersion)"
+        let agentId = appState.activeAgentId ?? ""
+        let segId = activeSegment?.id ?? ""
+        return "\(agentId)-\(appState.conversationVersion)-\(segId)"
     }
 
     /// Lightweight last-message-ID for scroll tracking — avoids flatMap over all segments.
     private var lastMessageId: UUID? {
-        guard let id = appState.activeAgentId else { return nil }
-        return appState.conversations[id]?.last?.messages.last?.id
+        activeSegment?.messages.last?.id
     }
 
     var body: some View {
@@ -33,6 +83,9 @@ struct ChatView: View {
             // Header
             if let agent = appState.activeAgent {
                 chatHeader(agent)
+                if isSearching {
+                    searchBar
+                }
                 Divider()
             }
 
@@ -45,23 +98,6 @@ struct ChatView: View {
                                 .controlSize(.small)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 20)
-                        } else if let agentId = appState.activeAgentId,
-                                  appState.hasMoreHistory(agentId: agentId) {
-                            // Scroll-to-top trigger: loads older sessions on appear.
-                            // id changes after each load so SwiftUI recreates the view,
-                            // re-firing onAppear for continuous scroll-back loading.
-                            Color.clear
-                                .frame(height: 1)
-                                .id("load-more-\(appState.pendingHistoryCount(agentId: agentId))")
-                                .onAppear {
-                                    // Remember the first message so we can restore scroll position
-                                    anchorBeforeHistoryLoad = cachedGroupedMessages.first(where: {
-                                        if case .single = $0 { return true }
-                                        if case .toolCallGroup = $0 { return true }
-                                        return false
-                                    })?.firstMessageId
-                                    appState.loadMoreHistory(agentId: agentId)
-                                }
                         }
 
                         if cachedGroupedMessages.isEmpty && !appState.isLoadingHistory {
@@ -91,6 +127,12 @@ struct ChatView: View {
                                     .id(messages.first?.id ?? UUID())
                             }
                         }
+                        // Sentinel to detect whether user is near bottom
+                        Color.clear
+                            .frame(height: 1)
+                            .id("bottom-sentinel")
+                            .onAppear { isNearBottom = true }
+                            .onDisappear { isNearBottom = false }
                     }
                     .padding(20)
                 }
@@ -100,6 +142,8 @@ struct ChatView: View {
                     if let oldId, let pos = scrollPositionId {
                         savedScrollPositions[oldId] = pos
                     }
+                    // Reset to current session on agent switch
+                    selectedSessionId = ""
                 }
                 .onChange(of: lastMessageId) {
                     let ctx = makeScrollContext()
@@ -114,7 +158,7 @@ struct ChatView: View {
                 }
                 .task(id: cacheKey) {
                     cachedGroupedMessages = Self.computeGroupedMessages(
-                        segments: appState.conversations[appState.activeAgentId ?? ""]
+                        segment: activeSegment
                     )
 
                     let ctx = makeScrollContext()
@@ -150,25 +194,206 @@ struct ChatView: View {
 
     private func chatHeader(_ agent: Agent) -> some View {
         HStack(spacing: 10) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(MinoTheme.avatarGradient(for: agent.name))
-                    .frame(width: 28, height: 28)
-                Text(String(agent.name.prefix(1)))
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(.white)
-            }
-
             Text(agent.name)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: 13, weight: .medium))
 
             statusBadge(agent.status)
 
             Spacer()
+
+            // New conversation button
+            Button {
+                appState.startNewConversation()
+            } label: {
+                Image(systemName: "square.and.pencil")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("New conversation")
+            .disabled(appState.isGenerating)
+
+            // Search button
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    isSearching.toggle()
+                    if !isSearching {
+                        searchText = ""
+                        searchResults = []
+                    }
+                }
+            } label: {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 12))
+                    .foregroundStyle(isSearching ? Color.accentColor : .secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Search messages")
+
+            // Session picker — only show when there are multiple sessions
+            if hasMultipleSessions {
+                sessionPicker
+            }
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 10)
-        .background(.bar)
+        .padding(.vertical, 8)
+        .background(.ultraThinMaterial)
+    }
+
+    // MARK: - Session Picker
+
+    /// Build the list of session options for the picker (computed once per render, lightweight).
+    private var pickerOptions: [SessionPickerOption] {
+        guard let agentId = appState.activeAgentId else { return [] }
+        var opts: [SessionPickerOption] = []
+
+        // Loaded segments — newest first
+        if let segments = appState.conversations[agentId] {
+            for segment in segments.reversed() {
+                let firstUser = segment.messages.first(where: { $0.role == .user })?.content ?? ""
+                let preview = String(firstUser.prefix(30))
+                let dateStr = formatSessionDate(segment.startDate)
+                let isLatest = segment.id == segments.last?.id
+                let label = isLatest ? "Current Session" : (preview.isEmpty ? dateStr : "\(dateStr)  \(preview)")
+                opts.append(SessionPickerOption(id: segment.id, label: label, isLoaded: true))
+            }
+        }
+
+        // Pending sessions — newest first, limit 20
+        if let pending = appState.pendingClaudeSessions[agentId] {
+            for summary in pending.prefix(20) {
+                opts.append(SessionPickerOption(
+                    id: summary.sessionId,
+                    label: formatSessionDate(summary.modifiedDate),
+                    isLoaded: false
+                ))
+            }
+        }
+
+        return opts
+    }
+
+    private var sessionPicker: some View {
+        let binding = Binding<String>(
+            get: { effectiveSessionId },
+            set: { selectedSessionId = $0 }
+        )
+        return Picker("", selection: binding) {
+            ForEach(pickerOptions) { opt in
+                Text(opt.label).tag(opt.id)
+            }
+        }
+        .pickerStyle(.menu)
+        .fixedSize()
+        .onChange(of: selectedSessionId) { _, newId in
+            guard !newId.isEmpty, let agentId = appState.activeAgentId else { return }
+            // If this is a pending session, trigger load
+            if let pending = appState.pendingClaudeSessions[agentId],
+               pending.contains(where: { $0.sessionId == newId }) {
+                appState.loadPendingSession(agentId: agentId, sessionId: newId)
+            }
+        }
+    }
+
+    // MARK: - Search
+
+    private var searchBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
+
+            TextField("Search messages...", text: $searchText)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+                .onSubmit { performSearch() }
+                .onChange(of: searchText) { _, newValue in
+                    if newValue.isEmpty {
+                        searchResults = []
+                        searchResultIndex = 0
+                    }
+                }
+
+            if !searchResults.isEmpty {
+                Text("\(searchResultIndex + 1)/\(searchResults.count)")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.secondary)
+
+                Button {
+                    if searchResultIndex > 0 { searchResultIndex -= 1 }
+                    else { searchResultIndex = searchResults.count - 1 }
+                    navigateToSearchResult()
+                } label: {
+                    Image(systemName: "chevron.up")
+                        .font(.system(size: 10, weight: .semibold))
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    if searchResultIndex < searchResults.count - 1 { searchResultIndex += 1 }
+                    else { searchResultIndex = 0 }
+                    navigateToSearchResult()
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 10, weight: .semibold))
+                }
+                .buttonStyle(.plain)
+            }
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    isSearching = false
+                    searchText = ""
+                    searchResults = []
+                }
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.tertiary)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
+        .background(.ultraThinMaterial)
+    }
+
+    private func performSearch() {
+        guard !searchText.isEmpty,
+              let agentId = appState.activeAgentId,
+              let segments = appState.conversations[agentId] else {
+            searchResults = []
+            return
+        }
+
+        let query = searchText.lowercased()
+        var results: [(segmentId: String, messageId: UUID, preview: String)] = []
+
+        for segment in segments {
+            for msg in segment.messages where msg.type == .text {
+                if msg.content.lowercased().contains(query) {
+                    let preview = String(msg.content.prefix(60))
+                    results.append((segmentId: segment.id, messageId: msg.id, preview: preview))
+                }
+            }
+        }
+
+        searchResults = results
+        searchResultIndex = 0
+        if !results.isEmpty {
+            navigateToSearchResult()
+        }
+    }
+
+    private func navigateToSearchResult() {
+        guard searchResultIndex < searchResults.count else { return }
+        let result = searchResults[searchResultIndex]
+        // Switch to the segment containing the result
+        selectedSessionId = result.segmentId
+        // Scroll to the message
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            scrollPositionId = result.messageId.uuidString
+        }
     }
 
     @ViewBuilder
@@ -176,10 +401,10 @@ struct ChatView: View {
         HStack(spacing: 4) {
             switch status {
             case .connected:
-                Circle().fill(.green).frame(width: 5, height: 5)
+                Circle().fill(.green).frame(width: 4, height: 4)
                 Text("Online")
             case .disconnected:
-                Circle().fill(.gray).frame(width: 5, height: 5)
+                Circle().fill(.gray).frame(width: 4, height: 4)
                 Text("Offline")
             case .connecting:
                 ProgressView().controlSize(.mini)
@@ -188,37 +413,19 @@ struct ChatView: View {
                 ProgressView().controlSize(.mini)
                 Text("Reconnecting (\(attempt))...")
                     .foregroundStyle(.orange)
-            case .cliActive:
-                ProgressView().controlSize(.mini)
-                Text("CLI Working...")
-                    .foregroundStyle(.orange)
             }
         }
         .font(.system(size: 10))
         .foregroundStyle(.secondary)
-        .padding(.horizontal, 7)
-        .padding(.vertical, 2)
-        .background(Color.primary.opacity(0.04))
-        .clipShape(Capsule())
     }
 
     private var emptyState: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 16) {
             Spacer()
             if let agent = appState.activeAgent {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .fill(MinoTheme.avatarGradient(for: agent.name))
-                        .frame(width: 64, height: 64)
-                        .shadow(color: MinoTheme.accent.opacity(0.2), radius: 16, y: 4)
-                    Text(String(agent.name.prefix(1)))
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                }
-
                 VStack(spacing: 6) {
                     Text(agent.name)
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(size: 16, weight: .medium))
 
                     Text("Send a message to start a conversation")
                         .font(.system(size: 13))
@@ -253,7 +460,7 @@ struct ChatView: View {
                     .padding(.vertical, 8)
                     .scrollContentBackground(.hidden)
                     .focused($isInputFocused)
-                    .disabled(appState.activeAgent == nil || appState.activeAgent?.status == .cliActive)
+                    .disabled(appState.activeAgent == nil)
                     .onKeyPress(.return, phases: .down) { keyPress in
                         if keyPress.modifiers.contains(.shift) {
                             return .ignored
@@ -263,9 +470,9 @@ struct ChatView: View {
                     }
 
                 if inputText.isEmpty {
-                    Text(appState.activeAgent?.status == .cliActive ? "CLI is working..." : "Message...")
+                    Text(inputPlaceholder)
                         .font(.system(size: 14))
-                        .foregroundStyle(.quaternary)
+                        .foregroundStyle(.tertiary)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 12)
                         .allowsHitTesting(false)
@@ -278,8 +485,8 @@ struct ChatView: View {
             .overlay(
                 RoundedRectangle(cornerRadius: MinoTheme.cornerRadius, style: .continuous)
                     .stroke(
-                        isInputFocused ? MinoTheme.accent.opacity(0.4) : MinoTheme.border,
-                        lineWidth: isInputFocused ? 1.5 : 0.5
+                        isInputFocused ? Color.accentColor.opacity(0.3) : MinoTheme.border,
+                        lineWidth: isInputFocused ? 1 : 0.5
                     )
             )
             .clipShape(RoundedRectangle(cornerRadius: MinoTheme.cornerRadius, style: .continuous))
@@ -297,7 +504,7 @@ struct ChatView: View {
                 Button(action: send) {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.system(size: 24))
-                        .foregroundStyle(canSend ? MinoTheme.accent : Color.primary.opacity(0.12))
+                        .foregroundStyle(canSend ? .secondary : Color.primary.opacity(0.12))
                 }
                 .buttonStyle(.plain)
                 .disabled(!canSend)
@@ -309,31 +516,25 @@ struct ChatView: View {
 
     // MARK: - Message Grouping
 
-    private static func computeGroupedMessages(segments: [ConversationSegment]?) -> [MessageGroupItem] {
-        guard let segments else { return [] }
+    private static func computeGroupedMessages(
+        segment: ConversationSegment?
+    ) -> [MessageGroupItem] {
+        guard let segment else { return [] }
         var result: [MessageGroupItem] = []
-
-        for (index, segment) in segments.enumerated() {
-            if index > 0 {
-                let sessionId = segment.claudeSessionId ?? segment.id
-                result.append(.sessionDivider(sessionId, segment.startDate))
-            }
-
-            var toolCallBuffer: [ChatMessage] = []
-            for msg in segment.messages {
-                if msg.type == .toolCall {
-                    toolCallBuffer.append(msg)
-                } else {
-                    if !toolCallBuffer.isEmpty {
-                        result.append(.toolCallGroup(toolCallBuffer))
-                        toolCallBuffer = []
-                    }
-                    result.append(.single(msg))
+        var toolCallBuffer: [ChatMessage] = []
+        for msg in segment.messages {
+            if msg.type == .toolCall {
+                toolCallBuffer.append(msg)
+            } else {
+                if !toolCallBuffer.isEmpty {
+                    result.append(.toolCallGroup(toolCallBuffer))
+                    toolCallBuffer = []
                 }
+                result.append(.single(msg))
             }
-            if !toolCallBuffer.isEmpty {
-                result.append(.toolCallGroup(toolCallBuffer))
-            }
+        }
+        if !toolCallBuffer.isEmpty {
+            result.append(.toolCallGroup(toolCallBuffer))
         }
         return result
     }
@@ -382,6 +583,7 @@ struct ChatView: View {
             activeAgentId: appState.activeAgentId,
             generatingAgentIds: appState.generatingAgentIds,
             isGenerating: appState.isGenerating,
+            isNearBottom: isNearBottom,
             visitedAgentIds: visitedAgentIds,
             anchorBeforeHistoryLoad: anchorBeforeHistoryLoad,
             savedScrollPositions: savedScrollPositions
@@ -411,9 +613,15 @@ struct ChatView: View {
         return nil
     }
 
+    private var inputPlaceholder: String {
+        if isViewingHistory {
+            return "Continue this session..."
+        }
+        return "Message..."
+    }
+
     private var canSend: Bool {
-        guard let agent = appState.activeAgent else { return false }
-        if agent.status == .cliActive { return false }
+        guard appState.activeAgent != nil else { return false }
         return !inputText.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
@@ -421,10 +629,20 @@ struct ChatView: View {
         let trimmed = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         inputText = ""
+        // When viewing a historical session, pass its claudeSessionId to resume
+        let resumeId: String? = isViewingHistory ? activeSegment?.claudeSessionId : nil
         Task {
-            await appState.sendMessage(trimmed)
+            await appState.sendMessage(trimmed, resumeSessionId: resumeId)
         }
     }
+}
+
+// MARK: - Session Picker Option
+
+private struct SessionPickerOption: Identifiable {
+    let id: String
+    let label: String
+    let isLoaded: Bool
 }
 
 // MARK: - Scroll Policy
@@ -446,6 +664,7 @@ struct ScrollContext {
     var activeAgentId: String?
     var generatingAgentIds: Set<String>
     var isGenerating: Bool
+    var isNearBottom: Bool
     var visitedAgentIds: Set<String>
     var anchorBeforeHistoryLoad: UUID?
     var savedScrollPositions: [String: String]
@@ -454,8 +673,10 @@ struct ScrollContext {
 enum ScrollPolicy {
     /// Decide what to do when `lastMessageId` changes (new message appended).
     static func onNewMessage(context: ScrollContext) -> ScrollAction {
+        // Only auto-scroll when the active agent is generating and user is near bottom
         guard let agentId = context.activeAgentId,
-              context.generatingAgentIds.contains(agentId) else {
+              context.generatingAgentIds.contains(agentId),
+              context.isNearBottom else {
             return .none
         }
         return .scrollToBottom
@@ -473,6 +694,10 @@ enum ScrollPolicy {
         }
         if let agentId = context.activeAgentId,
            !context.visitedAgentIds.contains(agentId) {
+            return .scrollToBottom
+        }
+        if let agentId = context.activeAgentId,
+           context.generatingAgentIds.contains(agentId) {
             return .scrollToBottom
         }
         if let agentId = context.activeAgentId,
@@ -515,7 +740,7 @@ enum MessageGroupItem: Identifiable {
 
 struct ToolCallGroupBubble: View {
     let messages: [ChatMessage]
-    @EnvironmentObject var appState: AppState
+    @Environment(AppState.self) var appState
     @State private var isExpanded = false
 
     private var hasRunning: Bool {
@@ -646,9 +871,6 @@ struct SuggestionPill: View {
                 .padding(.vertical, 7)
                 .background(Color.primary.opacity(0.04))
                 .clipShape(Capsule())
-                .overlay(
-                    Capsule().stroke(Color.primary.opacity(0.06), lineWidth: 0.5)
-                )
         }
         .buttonStyle(.plain)
     }

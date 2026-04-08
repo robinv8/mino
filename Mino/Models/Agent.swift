@@ -45,9 +45,6 @@ enum ConnectionStatus: Codable, Hashable {
     case disconnected
     case connecting
     case reconnecting(attempt: Int)
-    /// CLI is actively running — Mino should not send messages to avoid conflicts.
-    case cliActive
-
     // Custom Codable for backward compatibility
     enum CodingKeys: String, CodingKey {
         case status, attempt
@@ -59,7 +56,6 @@ enum ConnectionStatus: Codable, Hashable {
             switch raw {
             case "connected": self = .connected
             case "connecting": self = .connecting
-            case "cliActive": self = .cliActive
             default: self = .disconnected
             }
             return
@@ -69,7 +65,6 @@ enum ConnectionStatus: Codable, Hashable {
         switch status {
         case "connected": self = .connected
         case "connecting": self = .connecting
-        case "cliActive": self = .cliActive
         case "reconnecting":
             let attempt = try container.decodeIfPresent(Int.self, forKey: .attempt) ?? 0
             self = .reconnecting(attempt: attempt)
@@ -83,7 +78,6 @@ enum ConnectionStatus: Codable, Hashable {
         case .connected: try container.encode("connected", forKey: .status)
         case .disconnected: try container.encode("disconnected", forKey: .status)
         case .connecting: try container.encode("connecting", forKey: .status)
-        case .cliActive: try container.encode("cliActive", forKey: .status)
         case .reconnecting(let attempt):
             try container.encode("reconnecting", forKey: .status)
             try container.encode(attempt, forKey: .attempt)

@@ -41,14 +41,13 @@ struct StreamingBubble: View {
                     )
                 }
 
-                // Content bubble
+                // Content
                 HStack(alignment: .bottom, spacing: 0) {
                     if message.content.isEmpty && message.thinkingContent.isEmpty {
                         Text("Thinking...")
                             .foregroundStyle(.secondary)
                             .italic()
                     } else if message.content.isEmpty {
-                        // Has thinking but no content yet — skip content area
                         EmptyView()
                     } else if message.isStreaming {
                         let clean = displayContent
@@ -61,20 +60,13 @@ struct StreamingBubble: View {
 
                     if message.isStreaming && !message.content.isEmpty {
                         Rectangle()
-                            .fill(MinoTheme.accent)
-                            .frame(width: 2, height: 16)
+                            .fill(Color.primary.opacity(0.4))
+                            .frame(width: 1, height: 16)
                             .opacity(showCursor ? 1 : 0)
                     }
                 }
                 .padding(.horizontal, MinoTheme.bubblePaddingH)
                 .padding(.vertical, MinoTheme.bubblePaddingV)
-                .background(MinoTheme.agentBubble)
-                .clipShape(RoundedRectangle(cornerRadius: MinoTheme.cornerRadius, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: MinoTheme.cornerRadius, style: .continuous)
-                        .stroke(MinoTheme.border, lineWidth: 0.5)
-                )
-                .shadow(color: .black.opacity(0.04), radius: MinoTheme.bubbleShadowRadius, y: 2)
 
                 Text(message.timestamp, style: .time)
                     .font(.caption2)

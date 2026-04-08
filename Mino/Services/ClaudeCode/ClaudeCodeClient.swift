@@ -3,7 +3,7 @@ import Foundation
 /// High-level client that wraps ClaudeCodeTransport and converts
 /// Claude Code events (CCEvent) into the app's unified SessionUpdate stream.
 /// Uses plain class + DispatchQueue to avoid actor reentrancy/deadlock issues.
-final class ClaudeCodeClient: @unchecked Sendable {
+final class ClaudeCodeClient: AgentTransport, @unchecked Sendable {
     let workingDirectory: String
     private(set) var lastSessionId: String?
     private let transport = ClaudeCodeTransport()
@@ -50,7 +50,7 @@ final class ClaudeCodeClient: @unchecked Sendable {
         return updateStream
     }
 
-    func disconnect() {
+    func stopTransport() {
         queue.sync {
             consumeTask?.cancel()
             consumeTask = nil
@@ -58,6 +58,22 @@ final class ClaudeCodeClient: @unchecked Sendable {
             updateContinuation = nil
         }
         transport.stop()
+    }
+
+    // MARK: - AgentTransport conformance
+
+    func disconnect() async {
+        stopTransport()
+    }
+
+    var status: ConnectionStatus {
+        get async {
+            transport.isRunning ? .connected : .disconnected
+        }
+    }
+
+    func send(_ message: String, resumeSessionId: String?) async throws -> AsyncStream<SessionUpdate> {
+        try sendMessage(message, resumeSessionId: resumeSessionId)
     }
 
     // MARK: - Event Handling (called from consumeTask, synchronized via queue)

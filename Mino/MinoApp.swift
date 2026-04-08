@@ -1,23 +1,45 @@
 import SwiftUI
+import UserNotifications
+
+/// Delegate that ensures notifications are displayed even when the app is in the foreground.
+/// macOS silently drops notifications for active apps unless this delegate is set.
+class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound, .badge])
+    }
+}
 
 @main
 struct MinoApp: App {
-    @StateObject private var appState = AppState()
+    @State private var appState = AppState()
+    private let notificationDelegate = NotificationDelegate()
+
+    init() {
+        UNUserNotificationCenter.current().delegate = notificationDelegate
+    }
 
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .environmentObject(appState)
+                .environment(appState)
                 .frame(minWidth: 900, minHeight: 600)
                 .task {
                     await appState.loadData()
                 }
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-                    appState.clearDockBadge()
+                    if let id = appState.activeAgentId {
+                        appState.unreadCounts[id] = 0
+                    }
+                    appState.updateDockBadge()
                 }
         }
         .windowStyle(.titleBar)
         .defaultSize(width: 1200, height: 800)
+        #if DEBUG
         .commands {
             CommandMenu("Debug") {
                 Button("Load Preview Bot") {
@@ -26,9 +48,17 @@ struct MinoApp: App {
                 .keyboardShortcut("P", modifiers: [.command, .shift])
             }
         }
+        #endif
 
         Settings {
             SettingsView()
+        }
+
+        MenuBarExtra {
+            MenuBarView()
+                .environment(appState)
+        } label: {
+            Image(systemName: appState.menuBarIconName)
         }
     }
 }

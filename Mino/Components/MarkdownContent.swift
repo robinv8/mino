@@ -80,8 +80,8 @@ struct MarkdownContent: View {
             .code {
                 FontFamilyVariant(.monospaced)
                 FontSize(MinoTheme.codeSize)
-                ForegroundColor(role == .user ? .white.opacity(0.9) : Color(hex: 0x7C5CFC))
-                BackgroundColor(role == .user ? .white.opacity(0.12) : Color(hex: 0x7C5CFC).opacity(0.08))
+                ForegroundColor(role == .user ? .white.opacity(0.9) : .primary)
+                BackgroundColor(role == .user ? .white.opacity(0.12) : Color.primary.opacity(0.04))
             }
             .codeBlock { configuration in
                 configuration.label
@@ -92,7 +92,7 @@ struct MarkdownContent: View {
                         ForegroundColor(.primary)
                     }
                     .padding(12)
-                    .background(Color(.controlBackgroundColor).opacity(0.5))
+                    .background(Color.primary.opacity(0.03))
                     .clipShape(RoundedRectangle(cornerRadius: MinoTheme.cornerRadiusSmall, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: MinoTheme.cornerRadiusSmall, style: .continuous)
@@ -100,7 +100,7 @@ struct MarkdownContent: View {
                     )
             }
             .link {
-                ForegroundColor(role == .user ? .white : Color(hex: 0x7C5CFC))
+                ForegroundColor(role == .user ? .white : Color.accentColor)
             }
             .heading1 { configuration in
                 configuration.label
@@ -121,7 +121,7 @@ struct MarkdownContent: View {
             .blockquote { configuration in
                 HStack(spacing: 0) {
                     RoundedRectangle(cornerRadius: 1.5)
-                        .fill(MinoTheme.accent.opacity(0.3))
+                        .fill(Color.primary.opacity(0.15))
                         .frame(width: 2.5)
                     configuration.label
                         .markdownTextStyle {

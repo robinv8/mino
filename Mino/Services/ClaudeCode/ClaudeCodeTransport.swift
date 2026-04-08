@@ -17,7 +17,6 @@ final class ClaudeCodeTransport: @unchecked Sendable {
     /// Start a Claude Code process for a single prompt.
     /// When `sessionId` is provided, passes `--resume <sessionId>` to continue a previous conversation.
     func start(message: String, cwd: String, sessionId: String? = nil) throws -> AsyncStream<CCEvent> {
-        print("[CC-Transport] start: cwd=\(cwd), sessionId=\(sessionId ?? "nil"), msg=\(message.prefix(50))")
         stop()
 
         let proc = Process()
@@ -100,18 +99,13 @@ final class ClaudeCodeTransport: @unchecked Sendable {
             _ = handle.availableData
         }
 
-        print("[CC-Transport] launching process...")
         try proc.run()
-        print("[CC-Transport] process launched, pid=\(proc.processIdentifier)")
 
         // Write message to stdin, then close to signal EOF
         if let data = message.data(using: .utf8) {
-            print("[CC-Transport] writing \(data.count) bytes to stdin")
             stdin.fileHandleForWriting.write(data)
         }
-        print("[CC-Transport] closing stdin")
         stdin.fileHandleForWriting.closeFile()
-        print("[CC-Transport] start complete")
 
         // Monitor process termination
         proc.terminationHandler = { [weak self] proc in

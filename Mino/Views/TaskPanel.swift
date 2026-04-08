@@ -2,13 +2,13 @@ import SwiftUI
 import Charts
 
 struct TaskPanel: View {
-    @EnvironmentObject var appState: AppState
+    @Environment(AppState.self) var appState
 
     @State private var isEnvironmentExpanded: Bool = false
+    @State private var isTimelineExpanded: Bool = false
 
     private var agentId: String? { appState.activeAgentId }
 
-    /// Read dashboard data directly from AppState (incrementally maintained).
     private var data: TaskData {
         guard let agentId else { return TaskData() }
         return appState.taskData[agentId] ?? TaskData()
@@ -28,6 +28,11 @@ struct TaskPanel: View {
         return appState.sessionStats[agentId]
     }
 
+    private var activeAgent: Agent? {
+        guard let agentId else { return nil }
+        return appState.agents.first { $0.id == agentId }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
@@ -37,17 +42,18 @@ struct TaskPanel: View {
                     if let envInfo {
                         environmentSection(envInfo)
                     }
-                    statsCards
+                    statsGrid
                     if !data.toolUsageData.isEmpty {
                         toolUsageChart
                     }
-                    taskListSection
+                    messageStatsSection
+                    activityTimeline
                 }
                 .padding(12)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.windowBackgroundColor))
+        .background(.ultraThinMaterial)
     }
 
     // MARK: - Header
@@ -57,16 +63,48 @@ struct TaskPanel: View {
             Text("Dashboard")
                 .font(.system(size: 13, weight: .semibold))
             Spacer()
+            statusPill
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+    }
+
+    @ViewBuilder
+    private var statusPill: some View {
+        if let agentId {
+            let isGenerating = appState.generatingAgentIds.contains(agentId)
+            if isGenerating {
+                HStack(spacing: 4) {
+                    PulsingDot(color: Color.accentColor)
+                    Text("Generating...")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(Color.accentColor)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Color.accentColor.opacity(0.08))
+                .clipShape(Capsule())
+            } else {
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(.green)
+                        .frame(width: 6, height: 6)
+                    Text("Idle")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.green)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Color.green.opacity(0.08))
+                .clipShape(Capsule())
+            }
+        }
     }
 
     // MARK: - Environment Section
 
     private func environmentSection(_ info: EnvironmentInfo) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Compact pills row
             Button {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     isEnvironmentExpanded.toggle()
@@ -94,7 +132,6 @@ struct TaskPanel: View {
             }
             .buttonStyle(.plain)
 
-            // Expandable detail
             if isEnvironmentExpanded {
                 VStack(alignment: .leading, spacing: 10) {
                     if !info.tools.isEmpty {
@@ -110,9 +147,9 @@ struct TaskPanel: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .padding(10)
+        .padding(8)
         .background(Color.primary.opacity(0.03))
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 
     private func environmentDetailList(title: String, items: [String], icon: String) -> some View {
@@ -133,7 +170,6 @@ struct TaskPanel: View {
         }
     }
 
-    /// Shorten model identifier for display (e.g. "claude-sonnet-4-5-20250514" → "Sonnet 4.5")
     private func formatModelName(_ model: String) -> String {
         let lower = model.lowercased()
         if lower.contains("opus") {
@@ -152,59 +188,67 @@ struct TaskPanel: View {
             if lower.contains("4-5") || lower.contains("4.5") { return "Haiku 4.5" }
             return "Haiku"
         }
-        // Fallback: return as-is but truncated
         if model.count > 16 {
             return String(model.prefix(16))
         }
         return model
     }
 
-    // MARK: - Stats Cards
+    // MARK: - Stats Grid (2×2)
 
-    private var statsCards: some View {
-        HStack(spacing: 8) {
+    private var statsGrid: some View {
+        let columns = [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
+        return LazyVGrid(columns: columns, spacing: 8) {
             StatCard(
-                title: "Tasks",
+                title: "Tool Calls",
                 value: "\(data.completedCount)/\(data.taskItems.count)",
                 icon: "checkmark.circle",
+                color: .secondary
+            )
+            StatCard(
+                title: "Success Rate",
+                value: data.successRate.map { "\(Int($0 * 100))%" } ?? "—",
+                icon: "chart.pie",
                 color: .green
             )
             StatCard(
-                title: "Success",
-                value: data.successRate.map { "\(Int($0 * 100))%" } ?? "—",
-                icon: "chart.pie",
-                color: MinoTheme.accent,
-                ringProgress: data.successRate
+                title: "Cost",
+                value: costText,
+                icon: "dollarsign.circle",
+                color: .orange
             )
             StatCard(
-                title: stats?.totalCost ?? 0 > 0 ? "Cost" : "Duration",
-                value: statsValueText,
-                icon: stats?.totalCost ?? 0 > 0 ? "dollarsign.circle" : "clock",
-                color: .orange
+                title: "Duration",
+                value: durationText,
+                icon: "clock",
+                color: .blue
             )
         }
     }
 
-    private var statsValueText: String {
-        guard let s = stats else { return "—" }
-        if s.totalCost > 0 {
-            return String(format: "$%.2f", s.totalCost)
-        }
-        if s.totalDurationMs > 0 {
-            let seconds = Double(s.totalDurationMs) / 1000
-            if seconds < 60 { return String(format: "%.1fs", seconds) }
-            return String(format: "%.1fm", seconds / 60)
-        }
-        return "—"
+    private var costText: String {
+        guard let s = stats, s.totalCost > 0 else { return "—" }
+        return String(format: "$%.2f", s.totalCost)
+    }
+
+    private var durationText: String {
+        guard let s = stats, s.totalDurationMs > 0 else { return "—" }
+        let seconds = Double(s.totalDurationMs) / 1000
+        if seconds < 60 { return String(format: "%.1fs", seconds) }
+        return String(format: "%.1fm", seconds / 60)
     }
 
     // MARK: - Tool Usage Chart
 
     private var toolUsageChart: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Tool Usage")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.secondary)
+            HStack {
+                Text("Tool Usage")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                chartLegend
+            }
 
             let entries = data.toolUsageData
             Chart(entries) { entry in
@@ -229,48 +273,121 @@ struct TaskPanel: View {
                         .font(.system(size: 10))
                 }
             }
-            // Dynamic height: 24pt per tool, minimum 80
             .frame(height: max(80, CGFloat(Set(entries.map(\.toolName)).count) * 24))
         }
-        .padding(10)
+        .padding(8)
         .background(Color.primary.opacity(0.03))
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 
-    // MARK: - Task List Section
+    private var chartLegend: some View {
+        HStack(spacing: 8) {
+            LegendDot(color: .green, label: "Completed")
+            LegendDot(color: .red, label: "Failed")
+            LegendDot(color: .orange, label: "Running")
+        }
+    }
 
-    private var taskListSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
+    // MARK: - Message Stats
+
+    @ViewBuilder
+    private var messageStatsSection: some View {
+        if data.userMessageCount > 0 || data.agentMessageCount > 0 {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Messages")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "person.fill")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                        Text("\(data.userMessageCount) sent")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.primary.opacity(0.05))
+                    .clipShape(Capsule())
+
+                    HStack(spacing: 4) {
+                        Image(systemName: "cpu")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                        Text("\(data.agentMessageCount) received")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.primary.opacity(0.05))
+                    .clipShape(Capsule())
+                }
+            }
+            .padding(10)
+            .background(Color.primary.opacity(0.03))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+    }
+
+    // MARK: - Activity Timeline
+
+    private var activityTimeline: some View {
+        let items = data.taskItems
+        let hasItems = !items.isEmpty
+        let displayItems = isTimelineExpanded ? items : Array(items.suffix(5))
+
+        return VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("Tasks")
+                Text("Recent Activity")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text("\(data.taskItems.count)")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.tertiary)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 1)
-                    .background(Color.primary.opacity(0.04))
-                    .clipShape(Capsule())
+                if hasItems {
+                    Text("\(items.count)")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.tertiary)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Color.primary.opacity(0.04))
+                        .clipShape(Capsule())
+                }
             }
 
-            if data.taskItems.isEmpty {
+            if !hasItems {
                 emptyState
             } else {
-                LazyVStack(spacing: 2) {
-                    ForEach(data.taskItems.reversed()) { item in
-                        TaskRow(item: item, isSelected: appState.selectedToolCallId == item.id)
-                            .id(item.id)
-                            .onTapGesture {
-                                withAnimation(.easeInOut(duration: 0.15)) {
-                                    appState.selectedToolCallId = item.id
-                                }
-                            }
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(displayItems.reversed().enumerated()), id: \.element.id) { index, item in
+                        TimelineRow(
+                            item: item,
+                            isLast: index == displayItems.count - 1
+                        )
                     }
+                }
+
+                if items.count > 5 {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            isTimelineExpanded.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: isTimelineExpanded ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 9, weight: .semibold))
+                            Text(isTimelineExpanded ? "Collapse" : "Show All (\(items.count))")
+                                .font(.system(size: 10, weight: .medium))
+                        }
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
+        .padding(8)
+        .background(Color.primary.opacity(0.03))
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 
     // MARK: - Empty State
@@ -280,7 +397,7 @@ struct TaskPanel: View {
             Image(systemName: "checklist")
                 .font(.system(size: 20))
                 .foregroundStyle(.quaternary)
-            Text("No tasks yet")
+            Text("No activity yet")
                 .font(.system(size: 11))
                 .foregroundStyle(.tertiary)
         }
@@ -296,49 +413,130 @@ private struct StatCard: View {
     let value: String
     let icon: String
     let color: Color
-    var ringProgress: Double? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 4) {
-                if let progress = ringProgress {
-                    MiniRing(progress: progress, color: color)
-                        .frame(width: 14, height: 14)
-                } else {
-                    Image(systemName: icon)
-                        .font(.system(size: 10))
-                        .foregroundStyle(color)
-                }
+                Image(systemName: icon)
+                    .font(.system(size: 10))
+                    .foregroundStyle(color)
                 Text(title)
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
             }
             Text(value)
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .font(.system(size: 20, weight: .bold, design: .rounded))
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(8)
         .background(Color.primary.opacity(0.03))
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 }
 
-// MARK: - Mini Ring
+// MARK: - Timeline Row
 
-private struct MiniRing: View {
-    let progress: Double
-    let color: Color
+private struct TimelineRow: View {
+    let item: TaskItem
+    let isLast: Bool
 
     var body: some View {
-        ZStack {
+        HStack(alignment: .top, spacing: 8) {
+            // Timeline column: dot + line
+            VStack(spacing: 0) {
+                statusDot
+                if !isLast {
+                    Rectangle()
+                        .fill(Color.primary.opacity(0.1))
+                        .frame(width: 1)
+                        .frame(maxHeight: .infinity)
+                }
+            }
+            .frame(width: 12)
+
+            // Time
+            Text(item.timestamp, style: .time)
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(.tertiary)
+                .frame(width: 44, alignment: .leading)
+
+            // Content
+            if let info = item.toolCallInfo {
+                let formatted = ToolCallFormatter.summary(toolName: info.toolName, arguments: info.arguments)
+                Image(systemName: formatted.icon)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 14)
+                Text(formatted.text)
+                    .font(.system(size: 11))
+                    .lineLimit(1)
+                    .foregroundStyle(.primary)
+            }
+            Spacer()
+        }
+        .padding(.vertical, 4)
+    }
+
+    @ViewBuilder
+    private var statusDot: some View {
+        if let info = item.toolCallInfo {
+            switch info.status {
+            case .completed:
+                Circle()
+                    .fill(.green)
+                    .frame(width: 6, height: 6)
+            case .failed:
+                Circle()
+                    .fill(.red)
+                    .frame(width: 6, height: 6)
+            case .running:
+                Circle()
+                    .fill(.orange)
+                    .frame(width: 6, height: 6)
+            }
+        } else {
             Circle()
-                .stroke(color.opacity(0.2), lineWidth: 2)
+                .fill(Color.primary.opacity(0.2))
+                .frame(width: 6, height: 6)
+        }
+    }
+}
+
+// MARK: - Pulsing Dot
+
+private struct PulsingDot: View {
+    let color: Color
+    @State private var isPulsing = false
+
+    var body: some View {
+        Circle()
+            .fill(color)
+            .frame(width: 6, height: 6)
+            .opacity(isPulsing ? 1.0 : 0.3)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
+                    isPulsing = true
+                }
+            }
+    }
+}
+
+// MARK: - Legend Dot
+
+private struct LegendDot: View {
+    let color: Color
+    let label: String
+
+    var body: some View {
+        HStack(spacing: 3) {
             Circle()
-                .trim(from: 0, to: progress)
-                .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                .rotationEffect(.degrees(-90))
+                .fill(color)
+                .frame(width: 5, height: 5)
+            Text(label)
+                .font(.system(size: 9))
+                .foregroundStyle(.tertiary)
         }
     }
 }
@@ -366,7 +564,7 @@ struct ToolUsageEntry: Identifiable {
 struct TaskItem: Identifiable {
     let id: String
     let kind: TaskItemKind
-    let toolCallInfo: ToolCallInfo?
+    var toolCallInfo: ToolCallInfo?
     let thinkingContent: String?
     let timestamp: Date
 
@@ -376,7 +574,7 @@ struct TaskItem: Identifiable {
     }
 }
 
-// MARK: - Task Row
+// MARK: - Task Row (kept for potential detail expansion)
 
 struct TaskRow: View {
     let item: TaskItem
@@ -418,31 +616,40 @@ struct TaskRow: View {
 
             if isExpanded, let info = item.toolCallInfo {
                 VStack(alignment: .leading, spacing: 6) {
-                    if !info.arguments.isEmpty {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Arguments")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundStyle(.secondary)
-                            Text(info.arguments)
-                                .font(.system(size: 11, design: .monospaced))
-                                .padding(6)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(.quaternary)
-                                .clipShape(RoundedRectangle(cornerRadius: 4))
+                    // Rich detail views based on tool type
+                    if info.toolName == "Edit" || info.toolName == "Write" {
+                        DiffView(toolName: info.toolName, arguments: info.arguments)
+                    } else if info.toolName == "Bash", let result = info.result, !result.isEmpty {
+                        TerminalOutputView(output: result)
+                    } else {
+                        // Fallback: show raw arguments and result
+                        if !info.arguments.isEmpty {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Arguments")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                                Text(info.arguments)
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .padding(6)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(.quaternary)
+                                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                                    .lineLimit(10)
+                            }
                         }
-                    }
-                    if let result = info.result {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Result")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundStyle(.secondary)
-                            Text(result)
-                                .font(.system(size: 11, design: .monospaced))
-                                .padding(6)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(.quaternary)
-                                .clipShape(RoundedRectangle(cornerRadius: 4))
-                                .lineLimit(20)
+                        if let result = info.result, !result.isEmpty {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Result")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                                Text(result)
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .padding(6)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(.quaternary)
+                                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                                    .lineLimit(20)
+                            }
                         }
                     }
                 }
@@ -450,10 +657,9 @@ struct TaskRow: View {
                 .padding(.bottom, 8)
             }
         }
-        .background(isSelected ? MinoTheme.accentSoft : Color.clear)
+        .background(isSelected ? Color.accentColor.opacity(0.08) : Color.clear)
         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
-
 }
 
 // MARK: - Environment Pill

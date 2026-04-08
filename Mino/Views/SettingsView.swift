@@ -3,173 +3,180 @@ import SwiftUI
 struct SettingsView: View {
     var body: some View {
         TabView {
+            GeneralSettingsTab()
+                .tabItem {
+                    Label("General", systemImage: "gear")
+                }
+
+            ClaudeCodeSettingsTab()
+                .tabItem {
+                    Label("Claude Code", systemImage: "terminal")
+                }
+
+            AppearanceSettingsTab()
+                .tabItem {
+                    Label("Appearance", systemImage: "paintbrush")
+                }
+
+            #if DEBUG
             ComponentsGalleryTab()
                 .tabItem {
                     Label("Components", systemImage: "square.grid.2x2")
                 }
+            #endif
         }
-        .frame(width: 680, height: 560)
+        .frame(width: 520, height: 400)
     }
 }
 
-// MARK: - Components Gallery
+// MARK: - General Settings
 
-private struct ComponentsGalleryTab: View {
+private struct GeneralSettingsTab: View {
+    @AppStorage("notificationsEnabled") private var notificationsEnabled = true
+    @AppStorage("launchAtLogin") private var launchAtLogin = false
+
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                header
+        Form {
+            Section("Notifications") {
+                Toggle("Enable notifications when tasks complete", isOn: $notificationsEnabled)
+            }
 
-                // Showcase each block type
-                sectionCard("text — Rich Text") {
-                    ContentBlockView(block: .text(TextBlock(content: "This is **bold**, this is *italic*, and this is `inline code`.\n\n> A blockquote for emphasis.")))
+            Section("Startup") {
+                Toggle("Launch Mino at login", isOn: $launchAtLogin)
+            }
+
+            Section("About") {
+                LabeledContent("Version") {
+                    Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0")
+                        .foregroundStyle(.secondary)
                 }
+                LabeledContent("Build") {
+                    Text(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1")
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
 
-                sectionCard("image — Image") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        // Generate a sample image with SwiftUI
-                        ZStack {
-                            RoundedRectangle(cornerRadius: MinoTheme.cornerRadiusSmall, style: .continuous)
-                                .fill(LinearGradient(
-                                    colors: [Color(hex: 0x7C5CFC), Color(hex: 0x6B4CE6)],
-                                    startPoint: .topLeading, endPoint: .bottomTrailing
-                                ))
-                            VStack(spacing: 6) {
-                                Image(systemName: "photo")
-                                    .font(.system(size: 28))
-                                Text("Image Block")
-                                    .font(.system(size: 14, weight: .semibold))
-                            }
-                            .foregroundStyle(.white)
-                        }
-                        .frame(height: 140)
+// MARK: - Claude Code Settings
 
-                        Text("A sample image with caption")
+private struct ClaudeCodeSettingsTab: View {
+    @AppStorage("claudeExecutablePath") private var claudeExecutablePath = ""
+    @State private var detectedPath: String = ""
+
+    var body: some View {
+        Form {
+            Section("Executable Path") {
+                TextField("claude binary path", text: $claudeExecutablePath, prompt: Text("Auto-detect"))
+                    .textFieldStyle(.roundedBorder)
+
+                if !detectedPath.isEmpty {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                            .font(.system(size: 11))
+                        Text("Found: \(detectedPath)")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                     }
                 }
 
+                Text("Leave empty to auto-detect from PATH. Mino checks ~/.local/bin, /usr/local/bin, and /opt/homebrew/bin.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+            }
+
+            Section("Permissions") {
+                LabeledContent("Mode") {
+                    Text("dangerously-skip-permissions")
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
+                Text("Mino runs Claude Code with --dangerously-skip-permissions for uninterrupted operation.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .formStyle(.grouped)
+        .task {
+            detectClaude()
+        }
+    }
+
+    private func detectClaude() {
+        let paths = [
+            "\(NSHomeDirectory())/.local/bin/claude",
+            "/usr/local/bin/claude",
+            "/opt/homebrew/bin/claude",
+        ]
+        for path in paths {
+            if FileManager.default.fileExists(atPath: path) {
+                detectedPath = path
+                return
+            }
+        }
+    }
+}
+
+// MARK: - Appearance Settings
+
+private struct AppearanceSettingsTab: View {
+    @AppStorage("appearance") private var appearance = "system"
+
+    var body: some View {
+        Form {
+            Section("Theme") {
+                Picker("Appearance", selection: $appearance) {
+                    Text("System").tag("system")
+                    Text("Light").tag("light")
+                    Text("Dark").tag("dark")
+                }
+                .pickerStyle(.segmented)
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+// MARK: - Components Gallery (Debug only)
+
+#if DEBUG
+private struct ComponentsGalleryTab: View {
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                Text("Content Spec Components")
+                    .font(.system(size: 16, weight: .bold))
+                Text("Preview of structured content components supported by Mino")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+
+                sectionCard("text — Rich Text") {
+                    ContentBlockView(block: .text(TextBlock(content: "This is **bold**, *italic*, and `code`.")))
+                }
+
                 sectionCard("code — Code Block") {
                     ContentBlockView(block: .code(CodeBlock(
-                        content: "struct ContentBlock: Codable {\n    let type: String\n    let content: String\n}",
+                        content: "struct ContentBlock: Codable {\n    let type: String\n}",
                         language: "swift",
                         filename: "ContentBlock.swift",
                         startLine: 1
                     )))
                 }
 
-                sectionCard("link — Link Card") {
-                    ContentBlockView(block: .link(LinkBlock(
-                        url: "https://github.com",
-                        title: "GitHub",
-                        description: "Where the world builds software."
-                    )))
-                }
-
-                sectionCard("file — File Reference") {
-                    ContentBlockView(block: .file(FileBlock(
-                        path: "/Users/robin/Documents/report.pdf",
-                        name: "report.pdf",
-                        size: 2_048_576,
-                        mimeType: "application/pdf"
-                    )))
-                }
-
                 sectionCard("table — Table") {
                     ContentBlockView(block: .table(TableBlock(
-                        headers: ["Component", "Status", "Version"],
-                        rows: [
-                            ["text", "Supported", "0.1"],
-                            ["image", "Supported", "0.1"],
-                            ["code", "Supported", "0.1"],
-                            ["link", "Supported", "0.1"],
-                            ["file", "Supported", "0.1"],
-                            ["table", "Supported", "0.1"],
-                            ["action", "Supported", "0.1"],
-                        ],
-                        caption: "Content Spec v0.1 Components"
+                        headers: ["Component", "Status"],
+                        rows: [["text", "OK"], ["code", "OK"], ["table", "OK"]],
+                        caption: "Content Spec v0.1"
                     )))
                 }
-
-                sectionCard("action — Action Buttons") {
-                    ContentBlockView(block: .action(ActionBlock(
-                        prompt: "Do you want to apply this change?",
-                        actions: [
-                            ActionItem(id: "apply", label: "Apply", style: "primary"),
-                            ActionItem(id: "reject", label: "Reject", style: "danger"),
-                            ActionItem(id: "skip", label: "Skip", style: nil),
-                        ]
-                    )))
-                }
-
-                sectionCard("radio — Single Select") {
-                    ContentBlockView(block: .radio(RadioBlock(
-                        label: "Select a framework:",
-                        options: [
-                            SelectionOption(id: "swiftui", label: "SwiftUI", description: "Declarative UI framework"),
-                            SelectionOption(id: "uikit", label: "UIKit", description: "Imperative UI framework"),
-                            SelectionOption(id: "appkit", label: "AppKit", description: "macOS native framework"),
-                        ],
-                        defaultValue: "swiftui"
-                    )))
-                }
-
-                sectionCard("checkbox — Multi Select") {
-                    ContentBlockView(block: .checkbox(CheckboxBlock(
-                        label: "Select features to enable:",
-                        options: [
-                            SelectionOption(id: "dark", label: "Dark Mode"),
-                            SelectionOption(id: "sync", label: "Cloud Sync"),
-                            SelectionOption(id: "notify", label: "Notifications"),
-                        ],
-                        defaultValues: ["dark"]
-                    )))
-                }
-
-                sectionCard("dropdown — Dropdown Select") {
-                    ContentBlockView(block: .dropdown(DropdownBlock(
-                        label: "Choose a language:",
-                        placeholder: "Select language...",
-                        options: [
-                            SelectionOption(id: "swift", label: "Swift"),
-                            SelectionOption(id: "python", label: "Python"),
-                            SelectionOption(id: "rust", label: "Rust"),
-                            SelectionOption(id: "go", label: "Go"),
-                        ]
-                    )))
-                }
-
-                // mino-block tag example
-                sectionCard("Inline Tag — <mino-block />") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Agents can embed tags in text:")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                        Text(#"<mino-block type="image" url="/tmp/chart.png" caption="Revenue" />"#)
-                            .font(.system(size: 11, design: .monospaced))
-                            .padding(8)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.primary.opacity(0.03))
-                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                    }
-                }
-
-                specVersion
             }
             .padding(24)
         }
         .background(Color(.windowBackgroundColor))
-    }
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Content Spec Components")
-                .font(.system(size: 16, weight: .bold))
-            Text("Preview of structured content components supported by Mino")
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-        }
     }
 
     private func sectionCard<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
@@ -177,7 +184,6 @@ private struct ComponentsGalleryTab: View {
             Text(title)
                 .font(.system(size: 12, weight: .semibold, design: .monospaced))
                 .foregroundStyle(MinoTheme.accent)
-
             content()
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(12)
@@ -189,15 +195,5 @@ private struct ComponentsGalleryTab: View {
                 )
         }
     }
-
-    private var specVersion: some View {
-        HStack {
-            Spacer()
-            Text("Content Spec v0.1 · 10 components")
-                .font(.system(size: 10))
-                .foregroundStyle(.quaternary)
-            Spacer()
-        }
-        .padding(.top, 8)
-    }
 }
+#endif

@@ -112,12 +112,6 @@ actor ACPTransport {
     }
 
     private func handleFrame(_ data: Data) {
-        // Log raw event frames for debugging
-        if let raw = String(data: data, encoding: .utf8),
-           raw.contains("\"type\":\"event\"") {
-            let preview = String(raw.prefix(500))
-            print("[ACP:RAW] \(preview)")
-        }
         let frame = GatewayFrame.parse(data)
         switch frame {
         case .response(let response):

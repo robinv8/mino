@@ -469,8 +469,20 @@ final class ContentBlockParserTests: XCTestCase {
 
 final class PersistenceServiceTests: XCTestCase {
 
+    private func makeTempService() -> (PersistenceService, URL) {
+        let tmpDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MinoTests-\(UUID().uuidString)", isDirectory: true)
+        return (PersistenceService(baseURL: tmpDir), tmpDir)
+    }
+
+    private func cleanup(_ url: URL) {
+        try? FileManager.default.removeItem(at: url)
+    }
+
     func testAgentsRoundTrip() async throws {
-        let service = PersistenceService()
+        let (service, tmpDir) = makeTempService()
+        defer { cleanup(tmpDir) }
+
         let agents = [
             Agent(id: "test-1", name: "Agent 1", url: "ws://localhost:8080", status: .disconnected),
             Agent(id: "test-2", name: "Agent 2", url: "", status: .disconnected, type: .claudeCode, workingDirectory: "/tmp")
@@ -484,13 +496,11 @@ final class PersistenceServiceTests: XCTestCase {
         XCTAssertEqual(loaded[0].name, "Agent 1")
         XCTAssertEqual(loaded[1].type, .claudeCode)
         XCTAssertEqual(loaded[1].workingDirectory, "/tmp")
-
-        // Clean up
-        try await service.saveAgents([])
     }
 
     func testConversationsRoundTrip() async throws {
-        let service = PersistenceService()
+        let (service, tmpDir) = makeTempService()
+        defer { cleanup(tmpDir) }
         let agentId = "roundtrip-test"
         let segments = [
             ConversationSegment(
@@ -513,9 +523,6 @@ final class PersistenceServiceTests: XCTestCase {
         XCTAssertEqual(loaded[0].messages[0].role, .user)
         XCTAssertEqual(loaded[0].messages[0].content, "Hello")
         XCTAssertEqual(loaded[0].messages[1].role, .agent)
-
-        // Clean up
-        try await service.saveConversations(agentId: agentId, segments: [])
     }
 
     func testLoadNonExistentAgentReturnsEmpty() async throws {
@@ -654,6 +661,7 @@ final class ScrollPolicyTests: XCTestCase {
         activeAgentId: String? = "agent-1",
         generatingAgentIds: Set<String> = [],
         isGenerating: Bool = false,
+        isNearBottom: Bool = true,
         visitedAgentIds: Set<String> = [],
         anchorBeforeHistoryLoad: UUID? = nil,
         savedScrollPositions: [String: String] = [:]
@@ -662,6 +670,7 @@ final class ScrollPolicyTests: XCTestCase {
             activeAgentId: activeAgentId,
             generatingAgentIds: generatingAgentIds,
             isGenerating: isGenerating,
+            isNearBottom: isNearBottom,
             visitedAgentIds: visitedAgentIds,
             anchorBeforeHistoryLoad: anchorBeforeHistoryLoad,
             savedScrollPositions: savedScrollPositions
@@ -690,6 +699,19 @@ final class ScrollPolicyTests: XCTestCase {
 
     func testNewMessage_noActiveAgent_doesNotScroll() {
         let ctx = baseContext(activeAgentId: nil, generatingAgentIds: ["agent-1"])
+        XCTAssertEqual(ScrollPolicy.onNewMessage(context: ctx), .none)
+    }
+
+    func testNewMessage_whileGenerating_userScrolledUp_doesNotScroll() {
+        let ctx = baseContext(
+            generatingAgentIds: ["agent-1"],
+            isNearBottom: false
+        )
+        XCTAssertEqual(ScrollPolicy.onNewMessage(context: ctx), .none)
+    }
+
+    func testNewMessage_notNearBottom_doesNotScroll() {
+        let ctx = baseContext(isNearBottom: false)
         XCTAssertEqual(ScrollPolicy.onNewMessage(context: ctx), .none)
     }
 
@@ -843,5 +865,30 @@ final class ScrollPolicyTests: XCTestCase {
         )
         XCTAssertEqual(ScrollPolicy.onNewMessage(context: ctx2), .none,
             "After history load, watcher messages should not scroll")
+    }
+
+    // MARK: Scenario: user scrolls up during generation (A4)
+
+    func testScenario_userScrollsUpDuringGeneration() {
+        // Step 1: User sends message → scrolls to bottom
+        XCTAssertEqual(ScrollPolicy.onGeneratingChanged(isGenerating: true), .scrollToBottom)
+
+        // Step 2: New messages arrive while user is near bottom → auto-scroll
+        let ctx1 = baseContext(
+            generatingAgentIds: ["agent-1"],
+            isNearBottom: true,
+            visitedAgentIds: ["agent-1"]
+        )
+        XCTAssertEqual(ScrollPolicy.onNewMessage(context: ctx1), .scrollToBottom,
+            "Near bottom during generation should auto-scroll")
+
+        // Step 3: User scrolls up to read history → stop auto-scrolling
+        let ctx2 = baseContext(
+            generatingAgentIds: ["agent-1"],
+            isNearBottom: false,
+            visitedAgentIds: ["agent-1"]
+        )
+        XCTAssertEqual(ScrollPolicy.onNewMessage(context: ctx2), .none,
+            "User scrolled up during generation should NOT auto-scroll")
     }
 }

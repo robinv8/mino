@@ -10,7 +10,7 @@ struct OpenClawCredentials {
     var password: String?
 }
 
-actor ACPClient {
+actor ACPClient: AgentTransport {
     private let transport = ACPTransport()
     private let reconnectionManager = ReconnectionManager()
     let serverURL: URL
@@ -40,10 +40,8 @@ actor ACPClient {
     // MARK: - Connection
 
     func connect() async throws {
-        print("[ACP] Connecting to \(serverURL)...")
         connectionStatusContinuation?.yield(.connecting)
         try await transport.connect(to: serverURL)
-        print("[ACP] WebSocket connected, waiting for challenge...")
 
         // Start listening for events
         eventTask = Task { [weak self] in
@@ -68,7 +66,6 @@ actor ACPClient {
 
         try await waitForChallenge()
         connectionStatusContinuation?.yield(.connected)
-        print("[ACP] Handshake complete!")
     }
 
     func disconnect() async {
@@ -185,19 +182,14 @@ actor ACPClient {
     }
 
     private func handleChallenge() async {
-        print("[ACP] Challenge received, sending connect request...")
-
         // Build auth params: prefer password, fallback to token
         var authParams: [String: Any]
         if let password = credentials.password {
             authParams = ["password": password]
-            print("[ACP] Using password auth")
         } else if let token = credentials.token {
             authParams = ["token": token]
-            print("[ACP] Using token auth")
         } else {
             authParams = [:]
-            print("[ACP] Warning: no credentials available")
         }
 
         let role = credentials.role ?? "operator"
@@ -242,23 +234,13 @@ actor ACPClient {
             await handleChallenge()
 
         case "agent":
-            print("[ACP] agent event: stream=\(event.payload?["stream"]?.stringValue ?? "nil")")
-            if let data = event.payload?["data"]?.dictValue {
-                let keys = data.keys.joined(separator: ",")
-                let phase = data["phase"] as? String
-                let delta = data["delta"] as? String
-                print("[ACP]   data keys=[\(keys)] phase=\(phase ?? "nil") delta=\(delta?.prefix(50).description ?? "nil")")
-            }
             handleAgentEvent(event)
 
         case "chat":
-            print("[ACP] chat event: \(event.payload?.mapValues { $0.stringValue ?? "?" } ?? [:])")
             handleChatEvent(event)
 
         default:
-            if event.event != "tick" && event.event != "health" && event.event != "heartbeat" {
-                print("[ACP] event: \(event.event)")
-            }
+            break
         }
     }
 
@@ -310,8 +292,6 @@ actor ACPClient {
 
             let meta = data["meta"] as? String
 
-            print("[ACP] tool event: name=\(name) id=\(toolId) phase=\(phase) isError=\(isError)")
-
             if phase == "start" {
                 updateContinuation?.yield(.toolCallStart(ToolCallInfo(
                     id: toolId, toolName: name,
@@ -347,7 +327,7 @@ actor ACPClient {
             }
 
         default:
-            print("[ACP] unhandled agent stream: \(stream) dataKeys=\(data.keys.sorted()) data=\(data)")
+            break
         }
     }
 
@@ -358,6 +338,19 @@ actor ACPClient {
         if state == "final" {
             updateContinuation?.yield(.lifecycleEnd)
         }
+    }
+
+    // MARK: - AgentTransport conformance
+
+    nonisolated var status: ConnectionStatus {
+        get async {
+            await isConnected ? .connected : .disconnected
+        }
+    }
+
+    func send(_ message: String, resumeSessionId: String?) async throws -> AsyncStream<SessionUpdate> {
+        try await sendMessage(message)
+        return streamUpdates()
     }
 }
 

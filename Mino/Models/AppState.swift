@@ -22,6 +22,8 @@ struct TaskData {
     var completedCount: Int = 0
     var failedCount: Int = 0
     var runningCount: Int = 0
+    var userMessageCount: Int = 0
+    var agentMessageCount: Int = 0
 
     var successRate: Double? {
         let finished = completedCount + failedCount
@@ -74,11 +76,12 @@ struct TaskData {
 }
 
 @MainActor
-class AppState: ObservableObject {
-    @Published var agents: [Agent] = []
-    @Published var activeAgentId: String?
-    /// Conversation storage. `@Published` so streaming content flows to views.
-    @Published var conversations: [String: [ConversationSegment]] = [:]
+@Observable
+class AppState {
+    var agents: [Agent] = []
+    var activeAgentId: String?
+    /// Conversation storage — streaming content flows to views via @Observable.
+    var conversations: [String: [ConversationSegment]] = [:]
     /// Structural version counter; only bumped when messages are added/removed/completed.
     /// Views use `task(id: cacheKey)` with this to avoid recomputing grouped message
     /// lists on every streaming text delta (which fires every 30ms).
@@ -90,16 +93,44 @@ class AppState: ObservableObject {
     private func bumpConversationVersion() {
         conversationVersion &+= 1
     }
-    @Published var isGenerating: Bool = false
-    @Published var generatingAgentIds: Set<String> = []
-    @Published var unreadCounts: [String: Int] = [:]
-    @Published var resources: [String: [ResourceItem]] = [:]
-    @Published var isTaskPanelVisible: Bool = false
-    @Published var selectedToolCallId: String?
-    @Published var sessionStats: [String: SessionStats] = [:]
-    @Published var environmentInfo: [String: EnvironmentInfo] = [:]
+
+    /// Start a new conversation for the active agent.
+    /// Creates an empty segment with no claudeSessionId, so the next message won't resume.
+    func startNewConversation() {
+        guard let agentId = activeAgentId else { return }
+        let segment = ConversationSegment(
+            id: UUID().uuidString,
+            agentId: agentId,
+            startDate: Date(),
+            messages: []
+        )
+        conversations[agentId, default: []].append(segment)
+        bumpConversationVersion()
+    }
+    var isGenerating: Bool = false
+    var generatingAgentIds: Set<String> = []
+    var unreadCounts: [String: Int] = [:]
+    var totalUnreadCount: Int {
+        unreadCounts.values.reduce(0, +)
+    }
+    var menuBarIconName: String {
+        if totalUnreadCount > 0 {
+            return "bubble.left.fill"
+        } else if !generatingAgentIds.isEmpty {
+            return "bubble.left.and.text.bubble.right"
+        } else {
+            return "bubble.left"
+        }
+    }
+    var resources: [String: [ResourceItem]] = [:]
+    var isTaskPanelVisible: Bool = false
+    var selectedToolCallId: String?
+    var sessionStats: [String: SessionStats] = [:]
+    var environmentInfo: [String: EnvironmentInfo] = [:]
     /// Incrementally maintained task data per agent — TaskPanel reads directly.
-    @Published var taskData: [String: TaskData] = [:]
+    var taskData: [String: TaskData] = [:]
+    /// Last error to display as toast
+    var lastError: AppError?
 
     private var acpClients: [String: ACPClient] = [:]
     private var ccClients: [String: ClaudeCodeClient] = [:]
@@ -111,17 +142,13 @@ class AppState: ObservableObject {
     /// Tracks which agents have already loaded Claude Code history
     private var claudeHistoryLoaded: Set<String> = []
     /// Remaining older sessions available for on-demand loading, keyed by agentId.
-    private var pendingClaudeSessions: [String: [ClaudeSessionSummary]] = [:]
+    /// Older Claude Code sessions not yet fully loaded — exposed for session card display.
+    var pendingClaudeSessions: [String: [ClaudeSessionSummary]] = [:]
     /// Skipped (earlier) message count per session file, keyed by "agentId:sessionId".
     private var skippedMessageCounts: [String: Int] = [:]
     /// File paths per session, keyed by "agentId:sessionId".
     private var sessionFilePaths: [String: URL] = [:]
-    @Published var isLoadingMoreHistory: Bool = false
-    /// File watchers for live CLI session sync
-    private var sessionWatchers: [String: ClaudeSessionWatcher] = [:]
-    /// Timers to reset agent status after CLI inactivity
-    private var watcherIdleTimers: [String: Task<Void, Never>] = [:]
-
+    var isLoadingMoreHistory: Bool = false
     // Throttle streaming text updates to avoid overwhelming SwiftUI
     private var pendingTextBuffer: [UUID: String] = [:]
     private var flushTask: Task<Void, Never>?
@@ -137,11 +164,7 @@ class AppState: ObservableObject {
     func loadData() async {
         do {
             let loaded = try await persistence.loadAgents()
-            if loaded.isEmpty {
-                agents = [Agent(id: "1", name: "OpenClaw", url: "ws://localhost:18789", status: .disconnected)]
-            } else {
-                agents = loaded.map { var a = $0; a.status = .disconnected; return a }
-            }
+            agents = loaded.map { var a = $0; a.status = .disconnected; return a }
             for agent in agents {
                 let segments = try await persistence.loadConversations(agentId: agent.id)
                 if !segments.isEmpty {
@@ -154,13 +177,13 @@ class AppState: ObservableObject {
                 rebuildTaskData(agentId: agent.id)
             }
         } catch {
+            #if DEBUG
             print("[Mino] Failed to load data: \(error)")
-            agents = [Agent(id: "1", name: "OpenClaw", url: "ws://localhost:18789", status: .disconnected)]
+            #endif
         }
-        // Load Claude Code history and start live watchers
+        // Load Claude Code history
         for agent in agents where agent.type == .claudeCode {
             loadClaudeCodeHistory(agentId: agent.id)
-            startSessionWatcher(agentId: agent.id)
         }
 
         // Auto-select first agent
@@ -327,13 +350,71 @@ class AppState: ObservableObject {
             ),
         ]
 
-        let segment = ConversationSegment(
-            id: "mock-session",
+        // Create multiple segments to test session card UI
+        let now = Date()
+        let historySegment1 = ConversationSegment(
+            id: "mock-session-1",
             agentId: mockId,
-            startDate: Date(),
+            startDate: now.addingTimeInterval(-7200), // 2 hours ago
+            messages: [
+                ChatMessage(role: .user, content: "重构 TaskPanel dashboard 布局", type: .text,
+                            timestamp: now.addingTimeInterval(-7200)),
+                ChatMessage(role: .agent, content: "好的，我来重构 TaskPanel。", type: .text,
+                            timestamp: now.addingTimeInterval(-7190)),
+                ChatMessage(role: .agent, content: "", type: .toolCall,
+                            timestamp: now.addingTimeInterval(-7100),
+                            toolCallInfo: ToolCallInfo(id: "h1-tc1", toolName: "Read",
+                                arguments: "{\"file_path\":\"/src/Views/TaskPanel.swift\"}",
+                                result: "ok", status: .completed)),
+                ChatMessage(role: .agent, content: "", type: .toolCall,
+                            timestamp: now.addingTimeInterval(-7000),
+                            toolCallInfo: ToolCallInfo(id: "h1-tc2", toolName: "Edit",
+                                arguments: "{\"file_path\":\"/src/Views/TaskPanel.swift\"}",
+                                result: "ok", status: .completed)),
+                ChatMessage(role: .agent, content: "", type: .toolCall,
+                            timestamp: now.addingTimeInterval(-6900),
+                            toolCallInfo: ToolCallInfo(id: "h1-tc3", toolName: "Edit",
+                                arguments: "{\"file_path\":\"/src/Views/ContentView.swift\"}",
+                                result: "ok", status: .completed)),
+                ChatMessage(role: .agent, content: "重构完成！", type: .text,
+                            timestamp: now.addingTimeInterval(-6600)),
+            ],
+            claudeSessionId: "claude-sess-abc123"
+        )
+
+        let historySegment2 = ConversationSegment(
+            id: "mock-session-2",
+            agentId: mockId,
+            startDate: now.addingTimeInterval(-3600), // 1 hour ago
+            messages: [
+                ChatMessage(role: .user, content: "修复滚动位置丢失的 bug", type: .text,
+                            timestamp: now.addingTimeInterval(-3600)),
+                ChatMessage(role: .agent, content: "我来看看滚动逻辑。", type: .text,
+                            timestamp: now.addingTimeInterval(-3590)),
+                ChatMessage(role: .agent, content: "", type: .toolCall,
+                            timestamp: now.addingTimeInterval(-3500),
+                            toolCallInfo: ToolCallInfo(id: "h2-tc1", toolName: "Read",
+                                arguments: "{\"file_path\":\"/src/Views/ChatView.swift\"}",
+                                result: "ok", status: .completed)),
+                ChatMessage(role: .agent, content: "", type: .toolCall,
+                            timestamp: now.addingTimeInterval(-3400),
+                            toolCallInfo: ToolCallInfo(id: "h2-tc2", toolName: "Edit",
+                                arguments: "{\"file_path\":\"/src/Views/ChatView.swift\"}",
+                                result: "ok", status: .completed)),
+                ChatMessage(role: .agent, content: "已修复，滚动位置现在会正确保存和恢复。", type: .text,
+                            timestamp: now.addingTimeInterval(-3100)),
+            ],
+            claudeSessionId: "claude-sess-def456"
+        )
+
+        let currentSegment = ConversationSegment(
+            id: "mock-session-current",
+            agentId: mockId,
+            startDate: now.addingTimeInterval(-60),
             messages: messages
         )
-        conversations[mockId] = [segment]
+
+        conversations[mockId] = [historySegment1, historySegment2, currentSegment]
         bumpConversationVersion()
     }
 
@@ -361,13 +442,11 @@ class AppState: ObservableObject {
     }
 
     func removeAgent(_ agent: Agent) {
-        sessionWatchers[agent.id]?.stop()
-        sessionWatchers.removeValue(forKey: agent.id)
         if let client = acpClients.removeValue(forKey: agent.id) {
             Task { await client.disconnect() }
         }
         if let client = ccClients.removeValue(forKey: agent.id) {
-            client.disconnect()
+            client.stopTransport()
         }
         agents.removeAll { $0.id == agent.id }
         conversations.removeValue(forKey: agent.id)
@@ -387,14 +466,13 @@ class AppState: ObservableObject {
 
     // MARK: - Messaging
 
-    func sendMessage(_ content: String) async {
+    /// Send a message. When `resumeSessionId` is provided, it resumes that specific Claude Code session.
+    func sendMessage(_ content: String, resumeSessionId: String? = nil) async {
         guard let agentId = activeAgentId,
               let agent = agents.first(where: { $0.id == agentId }) else {
-            print("[Mino] sendMessage: no active agent")
             return
         }
 
-        print("[Mino] sendMessage: agent=\(agent.name), type=\(agent.type)")
         let userMessage = ChatMessage(role: .user, content: content, type: .text)
         appendMessage(userMessage, to: agentId)
 
@@ -402,7 +480,7 @@ class AppState: ObservableObject {
         case .acp:
             await sendViaACP(content, agentId: agentId)
         case .claudeCode:
-            await sendViaClaudeCode(content, agentId: agentId)
+            await sendViaClaudeCode(content, agentId: agentId, explicitResumeSessionId: resumeSessionId)
         }
     }
 
@@ -414,6 +492,7 @@ class AppState: ObservableObject {
         appendMessage(placeholder, to: agentId)
         isGenerating = true
         generatingAgentIds.insert(agentId)
+        updateDockBadge()
 
         do {
             try await ensureConnected(agentId: agentId)
@@ -442,8 +521,6 @@ class AppState: ObservableObject {
         let needsInjection = !contentSpecInjected.contains(agentId)
         let actualContent = needsInjection ? contentSpecContext + content : content
         if needsInjection { contentSpecInjected.insert(agentId) }
-        print("[Mino] Sending message: injected=\(needsInjection), contentLength=\(actualContent.count)")
-
         do {
             try await client.sendMessage(actualContent)
         } catch {
@@ -457,11 +534,9 @@ class AppState: ObservableObject {
         }
     }
 
-    private func sendViaClaudeCode(_ content: String, agentId: String) async {
-        print("[Mino] sendViaClaudeCode: start")
+    private func sendViaClaudeCode(_ content: String, agentId: String, explicitResumeSessionId: String? = nil) async {
         guard let agent = agents.first(where: { $0.id == agentId }) else { return }
         let cwd = agent.workingDirectory ?? FileManager.default.currentDirectoryPath
-        print("[Mino] sendViaClaudeCode: cwd=\(cwd)")
 
         // Get or create client
         let client: ClaudeCodeClient
@@ -490,18 +565,17 @@ class AppState: ObservableObject {
         appendMessage(placeholder, to: agentId)
         isGenerating = true
         generatingAgentIds.insert(agentId)
+        updateDockBadge()
 
         if let idx = agents.firstIndex(where: { $0.id == agentId }) {
             agents[idx].status = .connecting
         }
 
-        // Resume from the latest segment's Claude Code sessionId if available
-        let resumeSessionId = conversations[agentId]?.last?.claudeSessionId
+        // Use explicit resume ID if provided, otherwise fall back to latest segment
+        let resumeSessionId = explicitResumeSessionId ?? conversations[agentId]?.last?.claudeSessionId
 
-        print("[Mino] sendViaClaudeCode: calling client.sendMessage, resumeSessionId=\(resumeSessionId ?? "nil")")
         do {
             let updateStream = try client.sendMessage(content, resumeSessionId: resumeSessionId)
-            print("[Mino] sendViaClaudeCode: stream obtained")
 
             if let idx = agents.firstIndex(where: { $0.id == agentId }) {
                 agents[idx].status = .connected
@@ -524,6 +598,7 @@ class AppState: ObservableObject {
             }
             isGenerating = false
             generatingAgentIds.remove(agentId)
+            lastError = .processStartFailed(error.localizedDescription)
             if let idx = agents.firstIndex(where: { $0.id == agentId }) {
                 agents[idx].status = .disconnected
             }
@@ -541,7 +616,7 @@ class AppState: ObservableObject {
             Task { try? await client.cancelChat() }
         }
         if let client = ccClients[agentId] {
-            client.disconnect()
+            client.stopTransport()
         }
 
         if let segments = conversations[agentId] {
@@ -567,16 +642,13 @@ class AppState: ObservableObject {
 
     private func ensureConnected(agentId: String) async throws {
         if let client = acpClients[agentId], await client.isConnected {
-            print("[Mino] Already connected to \(agentId)")
             return
         }
 
         guard let agentIdx = agents.firstIndex(where: { $0.id == agentId }) else {
-            print("[Mino] Agent not found: \(agentId)")
             return
         }
         agents[agentIdx].status = .connecting
-        print("[Mino] Connecting to \(agents[agentIdx].url)...")
 
         guard let url = URL(string: agents[agentIdx].url) else {
             agents[agentIdx].status = .disconnected
@@ -584,15 +656,13 @@ class AppState: ObservableObject {
         }
 
         let credentials = Self.loadOpenClawCredentials()
-        print("[Mino] Credentials loaded: deviceId=\(credentials.deviceId != nil), token=\(credentials.token != nil)")
 
         let client = ACPClient(url: url, credentials: credentials)
         do {
             try await client.connect()
-            print("[Mino] Connected successfully!")
         } catch {
-            print("[Mino] Connection failed: \(error)")
             agents[agentIdx].status = .disconnected
+            lastError = .connectionFailed(error.localizedDescription)
             throw error
         }
 
@@ -627,7 +697,6 @@ class AppState: ObservableObject {
         } else {
             home = FileManager.default.homeDirectoryForCurrentUser
         }
-        print("[Mino] Reading credentials from: \(home.path)")
         var creds = OpenClawCredentials()
 
         // Read device identity
@@ -681,6 +750,7 @@ class AppState: ObservableObject {
             isGenerating = false
             generatingAgentIds.remove(agentId)
             saveConversations(agentId: agentId)
+            notifyAgentFinished(agentId: agentId, messageId: streamingId)
 
         case .toolCallStart(let info):
             let msg = ChatMessage(role: .agent, content: "", type: .toolCall, toolCallInfo: info)
@@ -754,7 +824,6 @@ class AppState: ObservableObject {
                 environmentInfo[agentId] = info
             }
             if let sessionId, !sessionId.isEmpty {
-                print("[Mino] Received Claude Code sessionId: \(sessionId)")
                 updateCurrentSegmentId(agentId: agentId, sessionId: sessionId)
             }
 
@@ -785,27 +854,16 @@ class AppState: ObservableObject {
             generatingAgentIds.remove(agentId)
             saveConversations(agentId: agentId)
 
-            // Allow watcher to pick up future CLI usage of this session
-            if let sessionId = conversations[agentId]?.last?.claudeSessionId {
-                sessionWatchers[agentId]?.removeExclusion(sessionId: sessionId)
-            }
-
-            // Notify user if app is not active
-            if !NSApplication.shared.isActive {
-                let agentName = agents.first(where: { $0.id == agentId })?.name ?? "Agent"
-                sendLocalNotification(agentName: agentName)
-                updateDockBadge()
-            }
+            notifyAgentFinished(agentId: agentId, messageId: streamingId)
         }
     }
 
     func selectAgent(_ agentId: String) {
         activeAgentId = agentId
         unreadCounts[agentId] = 0
+        updateDockBadge()
         // Lazily load Claude Code history on first switch
         loadClaudeCodeHistory(agentId: agentId)
-        // Start live watcher for CLI-side changes
-        startSessionWatcher(agentId: agentId)
     }
 
     // MARK: - Private: Text Delta Throttling
@@ -834,6 +892,11 @@ class AppState: ObservableObject {
         // Track unread for non-active agents
         if message.role == .agent && agentId != activeAgentId {
             unreadCounts[agentId, default: 0] += 1
+        }
+        // Increment message stats
+        switch message.role {
+        case .user: taskData[agentId, default: TaskData()].userMessageCount += 1
+        case .agent: taskData[agentId, default: TaskData()].agentMessageCount += 1
         }
 
         if conversations[agentId] == nil {
@@ -912,17 +975,35 @@ class AppState: ObservableObject {
 
     private func requestNotificationPermission() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, error in
-            if let error {
-                print("[Mino] Notification permission error: \(error)")
-            }
+            _ = error
         }
     }
 
-    private func sendLocalNotification(agentName: String) {
+    /// Notify user when an agent finishes generating (notification + dock badge).
+    /// Called from all stream-end paths.
+    func notifyAgentFinished(agentId: String, messageId: UUID? = nil) {
+        updateDockBadge()
+
+        guard UserDefaults.standard.object(forKey: "notificationsEnabled") as? Bool ?? true else { return }
+        // Skip notification if user is actively viewing this agent's chat
+        let isViewingThisAgent = agentId == activeAgentId
+            && (NSApplication.shared.mainWindow?.isKeyWindow ?? false)
+        guard !isViewingThisAgent else { return }
+
+        let agentName = agents.first(where: { $0.id == agentId })?.name ?? "Agent"
+        var preview = "Task completed"
+        if let mid = messageId, let msg = findMessage(id: mid, agentId: agentId) {
+            let text = msg.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !text.isEmpty {
+                preview = String(text.prefix(100))
+            }
+        }
+
         let content = UNMutableNotificationContent()
         content.title = agentName
-        content.body = "Task completed"
+        content.body = preview
         content.sound = .default
+        content.userInfo = ["agentId": agentId]
 
         let request = UNNotificationRequest(
             identifier: UUID().uuidString,
@@ -932,18 +1013,21 @@ class AppState: ObservableObject {
         UNUserNotificationCenter.current().add(request)
     }
 
-    private func updateDockBadge() {
-        let total = unreadCounts.values.reduce(0, +) + 1
-        NSApplication.shared.dockTile.badgeLabel = "\(total)"
-    }
-
-    func clearDockBadge() {
-        NSApplication.shared.dockTile.badgeLabel = nil
+    func updateDockBadge() {
+        let unread = totalUnreadCount
+        let generating = generatingAgentIds.count
+        if unread > 0 {
+            NSApplication.shared.dockTile.badgeLabel = "\(unread)"
+        } else if generating > 0 {
+            NSApplication.shared.dockTile.badgeLabel = "●"
+        } else {
+            NSApplication.shared.dockTile.badgeLabel = nil
+        }
     }
 
     // MARK: - Claude Code History
 
-    @Published var isLoadingHistory: Bool = false
+    var isLoadingHistory: Bool = false
 
     /// Load the tail of the most recent Claude Code session for an agent.
     /// Only loads the last ~50 messages; older messages and sessions are loaded on scroll.
@@ -951,38 +1035,56 @@ class AppState: ObservableObject {
         guard !claudeHistoryLoaded.contains(agentId) else { return }
         guard let agent = agents.first(where: { $0.id == agentId }),
               agent.type == .claudeCode,
-              let cwd = agent.workingDirectory,
-              conversations[agentId]?.isEmpty ?? true else { return }
+              let cwd = agent.workingDirectory else { return }
 
         claudeHistoryLoaded.insert(agentId)
-        isLoadingHistory = true
+        let hasExistingConversation = !(conversations[agentId]?.isEmpty ?? true)
 
-        Task {
-            let result = await Task.detached(priority: .userInitiated) {
-                ClaudeSessionLoader.loadMostRecentSession(for: cwd, agentId: agentId, tailCount: 50)
-            }.value
+        if hasExistingConversation {
+            // Watcher already populated current session — just discover older sessions
+            Task {
+                let sessions = await Task.detached(priority: .userInitiated) {
+                    guard let projectDir = ClaudeSessionLoader.projectDir(for: cwd) else { return [ClaudeSessionSummary]() }
+                    return ClaudeSessionLoader.listSessions(projectDir: projectDir)
+                }.value
 
-            if let segment = result.segment {
-                conversations[agentId] = [segment]
-                bumpConversationVersion()
-                rebuildTaskData(agentId: agentId)
-
-                // Track skipped messages for this session
-                if result.skippedMessagesInSession > 0 {
-                    let key = "\(agentId):\(segment.id)"
-                    skippedMessageCounts[key] = result.skippedMessagesInSession
-                    // Find the file path for this session
-                    if let projectDir = ClaudeSessionLoader.projectDir(for: cwd) {
-                        sessionFilePaths[key] = projectDir
-                            .appendingPathComponent(segment.id)
-                            .appendingPathExtension("jsonl")
-                    }
+                // Exclude sessions that are already loaded as segments
+                let loadedIds = Set(conversations[agentId]?.map(\.id) ?? [])
+                let older = sessions.filter { !loadedIds.contains($0.sessionId) }
+                if !older.isEmpty {
+                    pendingClaudeSessions[agentId] = older
+                    bumpConversationVersion() // trigger UI refresh
                 }
             }
-            if !result.olderSessions.isEmpty {
-                pendingClaudeSessions[agentId] = result.olderSessions
+        } else {
+            // No conversation yet — load the most recent session + discover older ones
+            isLoadingHistory = true
+            Task {
+                let result = await Task.detached(priority: .userInitiated) {
+                    ClaudeSessionLoader.loadMostRecentSession(for: cwd, agentId: agentId, tailCount: 50)
+                }.value
+
+                if let segment = result.segment {
+                    conversations[agentId] = [segment]
+                    bumpConversationVersion()
+                    rebuildTaskData(agentId: agentId)
+
+                    // Track skipped messages for this session
+                    if result.skippedMessagesInSession > 0 {
+                        let key = "\(agentId):\(segment.id)"
+                        skippedMessageCounts[key] = result.skippedMessagesInSession
+                        if let projectDir = ClaudeSessionLoader.projectDir(for: cwd) {
+                            sessionFilePaths[key] = projectDir
+                                .appendingPathComponent(segment.id)
+                                .appendingPathExtension("jsonl")
+                        }
+                    }
+                }
+                if !result.olderSessions.isEmpty {
+                    pendingClaudeSessions[agentId] = result.olderSessions
+                }
+                isLoadingHistory = false
             }
-            isLoadingHistory = false
         }
     }
 
@@ -1064,86 +1166,32 @@ class AppState: ObservableObject {
         }
     }
 
-    // MARK: - Live CLI Session Watcher
+    /// Load a specific pending session by sessionId and insert it into conversations.
+    /// Used when user taps a session card for a not-yet-loaded older session.
+    func loadPendingSession(agentId: String, sessionId: String) {
+        guard var pending = pendingClaudeSessions[agentId],
+              let idx = pending.firstIndex(where: { $0.sessionId == sessionId }) else { return }
+        let summary = pending.remove(at: idx)
+        pendingClaudeSessions[agentId] = pending
 
-    /// Start watching CLI JSONL files for an agent. Idempotent.
-    func startSessionWatcher(agentId: String) {
-        guard sessionWatchers[agentId] == nil else { return }
-        guard let agent = agents.first(where: { $0.id == agentId }),
-              agent.type == .claudeCode,
-              let cwd = agent.workingDirectory,
-              let projectDir = ClaudeSessionLoader.projectDir(for: cwd) else { return }
+        isLoadingMoreHistory = true
+        Task {
+            let segment = await Task.detached(priority: .userInitiated) {
+                ClaudeSessionLoader.loadSession(summary, agentId: agentId)
+            }.value
 
-        let watcher = ClaudeSessionWatcher(projectDir: projectDir, agentId: agentId)
-        watcher.onNewMessages = { [weak self] messages, sessionId, fileDate in
-            self?.handleWatcherMessages(messages, sessionId: sessionId, fileDate: fileDate, agentId: agentId)
-        }
-
-        // Exclude Mino's own active session to avoid duplicates
-        if let activeSessionId = conversations[agentId]?.last?.claudeSessionId {
-            watcher.exclude(sessionId: activeSessionId)
-        }
-
-        watcher.start()
-        sessionWatchers[agentId] = watcher
-    }
-
-    private func handleWatcherMessages(_ messages: [ChatMessage], sessionId: String, fileDate: Date, agentId: String) {
-        guard !messages.isEmpty else { return }
-
-        if var segments = conversations[agentId],
-           let idx = segments.firstIndex(where: { $0.claudeSessionId == sessionId }) {
-            segments[idx].messages.append(contentsOf: messages)
-            conversations[agentId] = segments
-        } else {
-            let segment = ConversationSegment(
-                id: sessionId,
-                agentId: agentId,
-                startDate: fileDate,
-                messages: messages,
-                claudeSessionId: sessionId
-            )
-            conversations[agentId, default: []].append(segment)
-        }
-        bumpConversationVersion()
-
-        // Incremental: add tool calls from watcher messages to dashboard
-        for msg in messages where msg.type == .toolCall {
-            if let info = msg.toolCallInfo {
-                let item = TaskItem(
-                    id: msg.id.uuidString, kind: .toolCall, toolCallInfo: info,
-                    thinkingContent: nil, timestamp: msg.timestamp
-                )
-                taskData[agentId, default: TaskData()].addToolCall(item, info: info)
+            if let segment {
+                if var segs = conversations[agentId] {
+                    // Insert in chronological order
+                    let insertIdx = segs.firstIndex(where: { $0.startDate > segment.startDate }) ?? segs.endIndex
+                    segs.insert(segment, at: insertIdx)
+                    conversations[agentId] = segs
+                } else {
+                    conversations[agentId] = [segment]
+                }
+                bumpConversationVersion()
             }
-        }
-
-        // Update agent status to reflect CLI activity
-        if let idx = agents.firstIndex(where: { $0.id == agentId }) {
-            if !generatingAgentIds.contains(agentId) {
-                agents[idx].status = .cliActive
-            }
-        }
-        scheduleWatcherIdleReset(agentId: agentId)
-
-        // Notify if not active
-        if agentId != activeAgentId {
-            unreadCounts[agentId, default: 0] += 1
-        }
-    }
-
-    /// After 30s of no watcher updates, CLI is likely done — reset to disconnected.
-    private func scheduleWatcherIdleReset(agentId: String) {
-        watcherIdleTimers[agentId]?.cancel()
-        watcherIdleTimers[agentId] = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 30_000_000_000) // 30s
-            guard !Task.isCancelled else { return }
-            guard let self else { return }
-            if !self.generatingAgentIds.contains(agentId),
-               let idx = self.agents.firstIndex(where: { $0.id == agentId }),
-               self.agents[idx].status == .cliActive {
-                self.agents[idx].status = .disconnected
-            }
+            isLoadingMoreHistory = false
         }
     }
 
@@ -1157,8 +1205,12 @@ class AppState: ObservableObject {
         }
         var data = TaskData()
         for segment in segments {
-            for msg in segment.messages where msg.type == .toolCall {
-                if let info = msg.toolCallInfo {
+            for msg in segment.messages {
+                switch msg.role {
+                case .user: data.userMessageCount += 1
+                case .agent: data.agentMessageCount += 1
+                }
+                if msg.type == .toolCall, let info = msg.toolCallInfo {
                     let item = TaskItem(
                         id: msg.id.uuidString, kind: .toolCall, toolCallInfo: info,
                         thinkingContent: nil, timestamp: msg.timestamp
@@ -1180,13 +1232,11 @@ class AppState: ObservableObject {
         guard var segments = conversations[agentId], !segments.isEmpty else { return }
         segments[segments.count - 1].claudeSessionId = sessionId
         conversations[agentId] = segments
-        // No version bump needed — segment metadata change, not message structure
-        // Exclude from watcher to avoid duplicate messages
-        sessionWatchers[agentId]?.exclude(sessionId: sessionId)
     }
 
     private func saveConversations(agentId: String) {
         let segments = conversations[agentId] ?? []
         Task { try? await persistence.saveConversations(agentId: agentId, segments: segments) }
     }
+
 }

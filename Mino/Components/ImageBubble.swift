@@ -21,13 +21,6 @@ struct ImageBubble: View {
                     .foregroundStyle(.tertiary)
             }
             .padding(6)
-            .background(MinoTheme.agentBubble)
-            .clipShape(RoundedRectangle(cornerRadius: MinoTheme.cornerRadius, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: MinoTheme.cornerRadius, style: .continuous)
-                    .stroke(MinoTheme.border, lineWidth: 0.5)
-            )
-            .shadow(color: .black.opacity(0.04), radius: MinoTheme.bubbleShadowRadius, y: 2)
 
             Spacer(minLength: 60)
         }
