@@ -279,7 +279,7 @@
                 </a>
                 <div class="brew-cmd" onclick="copyBrew(this)" title="Click to copy">
                     <span>$</span>
-                    <code>brew install --cask mino</code>
+                    <code>brew install robinv8/mino/mino</code>
                     <span class="copy-icon">&#x2398;</span>
                     <span class="copied">Copied!</span>
                 </div>
@@ -321,7 +321,7 @@
             <div class="install-methods">
                 <div class="install-card">
                     <h3>Homebrew</h3>
-                    <pre>brew install --cask mino</pre>
+                    <pre>brew install robinv8/mino/mino</pre>
                 </div>
                 <div class="install-card">
                     <h3>Direct Download</h3>
@@ -347,7 +347,7 @@
 
     <script>
         function copyBrew(el) {
-            navigator.clipboard.writeText("brew install --cask mino");
+            navigator.clipboard.writeText("brew install robinv8/mino/mino");
             var icon = el.querySelector(".copy-icon");
             var copied = el.querySelector(".copied");
             icon.style.display = "none";
