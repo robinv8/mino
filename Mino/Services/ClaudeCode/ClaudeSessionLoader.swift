@@ -81,9 +81,8 @@ class ClaudeSessionLoader {
         }
         let olderSessions = Array(sessions.dropFirst())
 
-        let allMessages = loadMessages(from: newest.filePath)
-        let skipped = max(0, allMessages.count - tailCount)
-        let tailMessages = Array(allMessages.suffix(tailCount))
+        let (tailMessages, totalLineCount) = loadTailLines(from: newest.filePath, tailCount: tailCount)
+        let skipped = max(0, totalLineCount - tailMessages.count)
 
         guard !tailMessages.isEmpty else {
             return LoadResult(segment: nil, skippedMessagesInSession: 0, olderSessions: olderSessions)
@@ -126,6 +125,114 @@ class ClaudeSessionLoader {
         let start = max(0, currentSkipped - count)
         let slice = Array(allMessages[start..<currentSkipped])
         return (slice, start)
+    }
+
+    /// Read only the last N JSONL lines from a file by scanning backwards from EOF.
+    /// Returns parsed messages and the total line count (for skipped calculation).
+    /// Much faster than loadMessages() for large files when only the tail is needed.
+    static func loadTailLines(from file: URL, tailCount: Int) -> (messages: [ChatMessage], totalLineCount: Int) {
+        guard let handle = try? FileHandle(forReadingFrom: file) else { return ([], 0) }
+        defer { try? handle.close() }
+
+        let fileSize = handle.seekToEndOfFile()
+        guard fileSize > 0 else { return ([], 0) }
+
+        // We need extra lines because each "assistant" entry can produce multiple ChatMessages.
+        // Read more JSONL lines than tailCount to ensure we get enough messages.
+        // Also count total lines for the skipped calculation.
+        let targetLineCount = tailCount * 3  // assistant entries expand to multiple messages
+
+        let chunkSize: UInt64 = 256 * 1024  // 256KB chunks from end
+        var tailLines: [Data] = []
+        var totalLineCount = 0
+        var offset = fileSize
+        var remainder = Data()
+
+        // Scan backwards in chunks
+        while offset > 0 {
+            let readSize = min(chunkSize, offset)
+            offset -= readSize
+            handle.seek(toFileOffset: offset)
+            var chunk = handle.readData(ofLength: Int(readSize))
+
+            // Prepend to remainder from previous iteration
+            if !remainder.isEmpty {
+                chunk.append(remainder)
+                remainder = Data()
+            }
+
+            // Split into lines
+            let newline = UInt8(0x0A)
+            var lines: [Data] = []
+            var searchEnd = chunk.endIndex
+            while searchEnd > chunk.startIndex {
+                if let nlIndex = chunk[chunk.startIndex..<searchEnd].lastIndex(of: newline) {
+                    let lineData = chunk[(nlIndex + 1)..<searchEnd]
+                    if !lineData.isEmpty {
+                        lines.append(Data(lineData))
+                    }
+                    searchEnd = nlIndex
+                } else {
+                    // No more newlines — this partial line carries over
+                    remainder = Data(chunk[chunk.startIndex..<searchEnd])
+                    break
+                }
+            }
+
+            totalLineCount += lines.count
+            // Prepend lines to tailLines (they're in reverse order within this chunk)
+            tailLines.insert(contentsOf: lines, at: 0)
+
+            // If we have enough lines and don't need total count for skipped, keep counting
+            // but stop collecting extra lines
+            if tailLines.count > targetLineCount {
+                // Keep only the last targetLineCount lines
+                let excess = tailLines.count - targetLineCount
+                tailLines.removeFirst(excess)
+
+                // Still need to count remaining lines for skipped calculation
+                // Just count newlines in remaining data without parsing
+                while offset > 0 {
+                    let countSize = min(chunkSize, offset)
+                    offset -= countSize
+                    handle.seek(toFileOffset: offset)
+                    let countChunk = handle.readData(ofLength: Int(countSize))
+                    totalLineCount += countChunk.reduce(0) { $0 + ($1 == newline ? 1 : 0) }
+                }
+                break
+            }
+        }
+
+        // Handle the very first line (no leading newline)
+        if !remainder.isEmpty {
+            totalLineCount += 1
+            if tailLines.count < targetLineCount {
+                tailLines.insert(remainder, at: 0)
+            }
+        }
+
+        // Parse only the tail lines into messages
+        var messages: [ChatMessage] = []
+        for lineData in tailLines {
+            guard let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
+                  let type = json["type"] as? String else { continue }
+
+            let timestamp = parseTimestamp(json["timestamp"]) ?? Date()
+            switch type {
+            case "user":
+                if let msg = parseUserEntry(json, timestamp: timestamp) {
+                    messages.append(msg)
+                }
+            case "assistant":
+                messages.append(contentsOf: parseAssistantEntry(json, timestamp: timestamp))
+            default:
+                continue
+            }
+        }
+
+        // Only return the last tailCount messages
+        let finalMessages = messages.count > tailCount ? Array(messages.suffix(tailCount)) : messages
+        return (finalMessages, totalLineCount)
     }
 
     /// Parse a JSONL file into ChatMessage array using streaming FileHandle reads.
